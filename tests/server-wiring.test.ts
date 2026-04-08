@@ -5,6 +5,16 @@ describe("server wiring", () => {
   it("registers all v0.2 tools", () => {
     const names = Object.values(allTools).map((tool) => tool.name).sort();
     expect(names).toEqual([
+      "mantle_buildAaveBorrow",
+      "mantle_buildAaveRepay",
+      "mantle_buildAaveSupply",
+      "mantle_buildAaveWithdraw",
+      "mantle_buildAddLiquidity",
+      "mantle_buildApprove",
+      "mantle_buildRemoveLiquidity",
+      "mantle_buildSwap",
+      "mantle_buildUnwrapMnt",
+      "mantle_buildWrapMnt",
       "mantle_checkRpcHealth",
       "mantle_getAllowances",
       "mantle_getBalance",

@@ -33,6 +33,7 @@
     "test:e2e:required": "E2E_REQUIRE_LIVE=true vitest run --config vitest.e2e.config.ts",
     "docs:dev": "npm --prefix docs run dev",
     "docs:build": "HOME=$PWD/docs npm --prefix docs run build",
+    "prepare": "tsc",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

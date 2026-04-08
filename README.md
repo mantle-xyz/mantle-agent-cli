@@ -1,10 +1,156 @@
 # mantle-agent-scaffold
 
-`mantle-agent-scaffold` packages three things together for external Mantle integrations: a pinned `skills/` checkout, the Mantle MCP server, and a local CLI built on the same read-oriented capabilities.
+Mantle MCP server for AI agents. Provides read and write tools for DeFi operations on Mantle L2 — swap, LP, lending (Aave V3), token approvals, and more. All write tools return unsigned transaction payloads; they never hold private keys or broadcast.
 
-Use the root README as a fast map of the repository. Use the docs site for deeper architecture and workflow detail.
+Supported protocols: **Merchant Moe**, **Agni Finance**, **Fluxion**, **Aave V3**.
 
-## Quick Start
+## Install as MCP Server
+
+Add to your `.mcp.json` or Claude Code `settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "mantle": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "github:mantle-xyz/mantle-agent-scaffold"],
+      "env": {
+        "MANTLE_MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
+```
+
+Restart your agent after adding the config. `npx` will fetch the repo, install dependencies, build automatically, and start the MCP server over stdio.
+
+## Available Tools
+
+### Read Tools (query on-chain state)
+
+| Tool | Purpose |
+|------|---------|
+| `mantle_getBalance` | Native MNT balance |
+| `mantle_getTokenBalances` | ERC-20 balances for multiple tokens |
+| `mantle_getAllowances` | Check token approvals for a spender |
+| `mantle_getSwapQuote` | Get swap price quote from a DEX |
+| `mantle_getPoolLiquidity` | Pool reserves and TVL |
+| `mantle_getPoolOpportunities` | Discover LP opportunities for a token |
+| `mantle_getLendingMarkets` | Aave V3 market data (APY, utilization) |
+| `mantle_getProtocolTvl` | Protocol-level TVL |
+| `mantle_resolveToken` | Resolve symbol → address + decimals |
+| `mantle_resolveAddress` | Resolve protocol name → contract address |
+| `mantle_validateAddress` | Verify an address is valid and active |
+| `mantle_getChainInfo` | Chain ID, RPC, explorer URLs |
+| `mantle_getChainStatus` | Block height, gas price |
+| `mantle_getTokenPrices` | USD prices for tokens |
+| `mantle_getTokenInfo` | Token metadata (name, symbol, decimals) |
+| `mantle_querySubgraph` | Query subgraph endpoints |
+| `mantle_queryIndexerSql` | Query SQL indexer |
+| `mantle_checkRpcHealth` | RPC endpoint health check |
+| `mantle_probeEndpoint` | Probe custom endpoint |
+
+### Write Tools (build unsigned transactions)
+
+Every write tool returns an `unsigned_tx` object with `{ to, data, value, chainId }`. The caller must sign and broadcast externally.
+
+| Tool | Purpose | Supported Protocols |
+|------|---------|-------------------|
+| `mantle_buildApprove` | ERC-20 approve (whitelist-enforced) | Any whitelisted spender |
+| `mantle_buildWrapMnt` | Wrap MNT → WMNT | WMNT |
+| `mantle_buildUnwrapMnt` | Unwrap WMNT → MNT | WMNT |
+| `mantle_buildSwap` | Swap tokens | Agni, Fluxion, Merchant Moe |
+| `mantle_buildAddLiquidity` | Add LP position | Agni, Fluxion, Merchant Moe |
+| `mantle_buildRemoveLiquidity` | Remove LP position | Agni, Fluxion, Merchant Moe |
+| `mantle_buildAaveSupply` | Deposit into Aave V3 | Aave V3 |
+| `mantle_buildAaveBorrow` | Borrow from Aave V3 | Aave V3 |
+| `mantle_buildAaveRepay` | Repay Aave V3 debt | Aave V3 |
+| `mantle_buildAaveWithdraw` | Withdraw from Aave V3 | Aave V3 |
+
+## DeFi Workflow
+
+The standard execution flow for any DeFi operation:
+
+```
+1. READ   — Check balances, get quotes, check allowances
+2. BUILD  — Call mantle_build* to get unsigned_tx
+3. SHOW   — Present human_summary to user for confirmation
+4. SIGN   — Sign and broadcast the unsigned_tx externally
+5. WAIT   — Wait for tx confirmation before next step
+6. REPEAT — Continue with next operation in the sequence
+```
+
+### Example: Swap 10 MNT → USDC on Agni
+
+```
+Step 1: mantle_buildWrapMnt({ amount: "10" })
+        → sign & broadcast → 10 WMNT
+
+Step 2: mantle_getSwapQuote({ provider: "agni", token_in: "WMNT", token_out: "USDC", amount_in: "10" })
+        → estimated: ~8.5 USDC
+
+Step 3: mantle_buildApprove({ token: "WMNT", spender: "0x319B69888b0d11cEC22caA5034e25FfFBDc88421", amount: "10" })
+        → sign & broadcast
+
+Step 4: mantle_buildSwap({ provider: "agni", token_in: "WMNT", token_out: "USDC", amount_in: "10", recipient: "0xYOUR_WALLET", fee_tier: 3000 })
+        → sign & broadcast → receive USDC
+```
+
+### Example: Add WMNT-USDe LP on Merchant Moe
+
+```
+Step 1: Wrap MNT → WMNT (mantle_buildWrapMnt)
+Step 2: Swap half WMNT → USDe (mantle_buildSwap, provider: "merchant_moe")
+Step 3: Approve WMNT for LB Router (mantle_buildApprove, spender: "0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a")
+Step 4: Approve USDe for LB Router (mantle_buildApprove)
+Step 5: Add liquidity (mantle_buildAddLiquidity, provider: "merchant_moe")
+```
+
+## Whitelisted Contracts
+
+Write tools enforce a whitelist. Only these contracts can be used as `spender` in approve or as swap/LP targets:
+
+| Protocol | Contract | Address |
+|----------|----------|---------|
+| Merchant Moe | MoeRouter | `0xeaEE7EE68874218c3558b40063c42B82D3E7232a` |
+| Merchant Moe | LB Router V2.2 | `0x013e138EF6008ae5FDFDE29700e3f2Bc61d21E3a` |
+| Agni | SwapRouter | `0x319B69888b0d11cEC22caA5034e25FfFBDc88421` |
+| Agni | PositionManager | `0x218bf598D1453383e2F4AA7b14fFB9BfB102D637` |
+| Fluxion | SwapRouter | `0x5628a59df0ecac3f3171f877a94beb26ba6dfaa0` |
+| Fluxion | PositionManager | `0x2b70c4e7ca8e920435a5db191e066e9e3afd8db3` |
+| Aave V3 | Pool | `0x458F293454fE0d67EC0655f3672301301DD51422` |
+| Aave V3 | WETHGateway | `0x9C6cCAC66b1c9AbA4855e2dD284b9e16e41E06eA` |
+| WMNT | WMNT | `0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8` |
+
+## Safety Rules
+
+1. **Never hold private keys** — all `mantle_build*` tools return unsigned payloads only
+2. **Verify addresses first** — use `mantle_resolveAddress` / `mantle_resolveToken` before building transactions
+3. **Get a quote before swapping** — call `mantle_getSwapQuote` to know expected output
+4. **Show `human_summary`** — every build tool returns a human-readable summary; present it to the user before signing
+5. **MNT is the gas token** — not ETH; all gas estimates are in MNT
+6. **Never fabricate calldata** — always use the build tools; do not construct transaction data manually
+
+## Skills
+
+Skills provide domain-specific workflows. After installing the MCP server, also initialize the skills submodule:
+
+```bash
+npm run skills:init
+```
+
+Skill definitions live under `skills/skills/<skill-name>/SKILL.md`. Relevant skills for DeFi:
+
+| Skill | Purpose |
+|-------|---------|
+| `mantle-defi-operator` | DeFi venue discovery, comparison, execution planning |
+| `mantle-risk-evaluator` | Risk scoring before state-changing operations |
+| `mantle-tx-simulator` | Pre-signing simulation summaries |
+| `mantle-portfolio-analyst` | Wallet balance/allowance analysis |
+| `mantle-address-registry-navigator` | Canonical address resolution |
+
+## Local Development
 
 ```bash
 npm install
@@ -13,73 +159,14 @@ npm run build
 MANTLE_MCP_TRANSPORT=stdio npm start
 ```
 
-This installs dependencies, initializes the pinned skills checkout, builds both entry points, and starts the MCP server from `dist/index.js`.
-
-## Skills
-
-The local `skills/` checkout is pinned to the external `mantle-xyz/mantle-skills` repository.
-
-After cloning:
+Verify:
 
 ```bash
-npm run skills:init
+npm run typecheck
+npm test
 ```
-
-When you intentionally want to refresh the pinned checkout:
-
-```bash
-npm run skills:sync
-```
-
-Project skill definitions live under `skills/skills/<skill-name>/SKILL.md`.
-
-Minimal usage pattern for external agents:
-
-1. Choose the skill that matches the user task.
-2. Read `skills/skills/<skill-name>/SKILL.md`.
-3. Apply the skill checklist before calling Mantle tools.
-
-More detail: [Skills and MCP Usage](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/skills/)
-
-## MCP
-
-The MCP server is the primary integration surface for hosted assistants, IDE agents, and custom orchestrators. It exposes Mantle chain, registry, account, token, DeFi-read, indexer, and diagnostics capabilities over stdio.
-
-For most clients, the reliable execution sequence is:
-
-1. Discover capabilities with `listTools`, `listResources`, and `listPrompts`.
-2. Load required context with `readResource` or `getPrompt`.
-3. Execute tool calls with schema-valid arguments.
-4. Ground final output in MCP responses rather than free-form guesses.
-
-Implementation overview: [`src/README.md`](src/README.md)
-
-Minimal MCP client config:
-
-```json
-{
-  "mcpServers": {
-    "mantle": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["dist/index.js"],
-      "env": {
-        "MANTLE_MCP_TRANSPORT": "stdio",
-        "MANTLE_RPC_URL": "https://rpc.mantle.xyz",
-        "MANTLE_SEPOLIA_RPC_URL": "https://rpc.sepolia.mantle.xyz"
-      }
-    }
-  }
-}
-```
-
-More detail: [External Agent Integration](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/external-agents/)
 
 ## CLI
-
-`mantle-cli` is a local command-line wrapper around the same Mantle read capabilities. It is useful for quick manual inspection, shell workflows, and validating tool behavior without wiring up an MCP client.
-
-Examples:
 
 ```bash
 node dist/cli/index.js chain info
@@ -87,26 +174,11 @@ node dist/cli/index.js registry resolve USDC --json
 node dist/cli/index.js token prices --tokens USDC,WETH --json
 ```
 
-Usage overview: [`cli/README.md`](cli/README.md)
-
-## Verify
-
-```bash
-npm run typecheck
-npm test
-npm run docs:build
-```
-
 ## Documentation
 
-Documentation site: [mantle-xyz.github.io/mantle-agent-scaffold](https://mantle-xyz.github.io/mantle-agent-scaffold/)
-
-- [Concepts](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/) for the high-level model
-- [Skills and MCP Usage](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/skills/) for the skill-first operating model
-- [MCP server overview](src/README.md) for the internal `src/` layout and capability summary
-- [CLI overview](cli/README.md) for command-line usage and common commands
-- [External Agent Integration](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/external-agents/) for integration rules and execution flow
-- [Testing Philosophy](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/testing/) for validation and release expectations
-- [Architecture Model](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/architecture/) for runtime structure and safety boundaries
-
-If you are maintaining the docs site itself, the source lives in `docs/`.
+- [Docs site](https://mantle-xyz.github.io/mantle-agent-scaffold/)
+- [External Agent Integration](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/external-agents/)
+- [Skills and MCP Usage](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/skills/)
+- [Architecture Model](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/architecture/)
+- [Server implementation overview](src/README.md)
+- [CLI overview](cli/README.md)
