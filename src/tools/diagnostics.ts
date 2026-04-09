@@ -1,7 +1,7 @@
 import { CHAIN_CONFIGS } from "../config/chains.js";
 import { MantleMcpError } from "../errors.js";
 import { getRpcUrl } from "../lib/clients.js";
-import { ensureEndpointAllowed } from "../lib/endpoint-policy.js";
+import { ensureEndpointSafe, safeFetchOptions } from "../lib/endpoint-policy.js";
 import { normalizeNetwork } from "../lib/network.js";
 import type { Tool } from "../types.js";
 
@@ -16,11 +16,11 @@ type ProbeMethod = (typeof ALLOWED_PROBE_METHODS)[number];
 
 const defaultDeps: DiagnosticsDeps = {
   rpcCall: async (endpoint, method, params = []) => {
-    const response = await fetch(endpoint, {
+    const response = await fetch(endpoint, safeFetchOptions({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params })
-    });
+    }));
     const json = await response.json();
     if (json.error) {
       throw new Error(json.error.message ?? "RPC error");
@@ -55,7 +55,7 @@ export async function checkRpcHealth(
   const resolvedDeps = withDeps(deps);
   const { network } = normalizeNetwork(args);
   const endpointInput = typeof args.rpc_url === "string" ? args.rpc_url : getRpcUrl(network);
-  const endpoint = ensureEndpointAllowed(endpointInput).toString();
+  const endpoint = (await ensureEndpointSafe(endpointInput)).toString();
 
   const started = Date.now();
   try {
@@ -107,7 +107,7 @@ export async function probeEndpoint(
     );
   }
 
-  const endpoint = ensureEndpointAllowed(endpointInput).toString();
+  const endpoint = (await ensureEndpointSafe(endpointInput)).toString();
   const methodInput =
     typeof args.method === "string" ? args.method : "eth_blockNumber";
 

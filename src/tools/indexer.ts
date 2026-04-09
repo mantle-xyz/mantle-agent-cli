@@ -1,5 +1,5 @@
 import { MantleMcpError } from "../errors.js";
-import { ensureEndpointAllowed, ensureReadOnlySql } from "../lib/endpoint-policy.js";
+import { ensureEndpointSafe, ensureReadOnlySql, safeFetchOptions } from "../lib/endpoint-policy.js";
 import type { Tool } from "../types.js";
 
 interface FetchResult {
@@ -44,12 +44,12 @@ const defaultDeps: IndexerDeps = {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetch(endpoint, safeFetchOptions({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
         signal: controller.signal
-      });
+      }));
       const text = await response.text();
       const responseBytes = Buffer.byteLength(text, "utf8");
       const json = text.length === 0 ? {} : JSON.parse(text);
@@ -103,7 +103,7 @@ export async function querySubgraph(
     );
   }
 
-  const endpoint = ensureEndpointAllowed(endpointInput).toString();
+  const endpoint = (await ensureEndpointSafe(endpointInput)).toString();
 
   try {
     const { json, elapsed_ms, response_bytes } = await resolvedDeps.fetchJson(
@@ -177,7 +177,7 @@ export async function queryIndexerSql(
   }
 
   ensureReadOnlySql(query);
-  const endpoint = ensureEndpointAllowed(endpointInput).toString();
+  const endpoint = (await ensureEndpointSafe(endpointInput)).toString();
 
   try {
     const { json, elapsed_ms } = await resolvedDeps.fetchJson(

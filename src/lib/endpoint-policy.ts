@@ -1,4 +1,5 @@
 import { MantleMcpError } from "../errors.js";
+import * as dns from "node:dns/promises";
 
 function isIpv4(host: string): boolean {
   return /^\d+\.\d+\.\d+\.\d+$/.test(host);
@@ -106,14 +107,110 @@ export function ensureEndpointAllowed(endpoint: string): URL {
   return url;
 }
 
-const SQL_MUTATION_PATTERN = /\b(insert|update|delete|drop|alter|create|truncate|grant)\b/i;
+/**
+ * Resolve a hostname to IP addresses and reject if any resolve to private/loopback ranges.
+ * This prevents DNS rebinding and SSRF via hostname tricks.
+ */
+async function rejectPrivateResolution(hostname: string): Promise<void> {
+  // Skip resolution for direct IP inputs — already checked in ensureEndpointAllowed
+  if (isIpv4(hostname) || isBlockedIpv6(hostname)) return;
 
+  try {
+    const addresses = await dns.resolve4(hostname).catch(() => [] as string[]);
+    const addresses6 = await dns.resolve6(hostname).catch(() => [] as string[]);
+    const allAddresses = [...addresses, ...addresses6];
+
+    for (const addr of allAddresses) {
+      if (isPrivateIpv4(addr) || isBlockedIpv6(addr) || addr === "0.0.0.0") {
+        throw new MantleMcpError(
+          "ENDPOINT_NOT_ALLOWED",
+          `Hostname '${hostname}' resolves to private/loopback address ${addr}.`,
+          "Use a hostname that resolves to a public IP address.",
+          { hostname, resolved_address: addr }
+        );
+      }
+    }
+  } catch (error) {
+    if (error instanceof MantleMcpError) throw error;
+    // DNS resolution failure — allow through (the fetch will fail anyway)
+  }
+}
+
+/**
+ * Full endpoint validation: URL check + DNS resolution check.
+ * Use this for user-supplied endpoints (indexer, diagnostics probe).
+ */
+export async function ensureEndpointSafe(endpoint: string): Promise<URL> {
+  const url = ensureEndpointAllowed(endpoint);
+  await rejectPrivateResolution(url.hostname);
+  return url;
+}
+
+/**
+ * Create fetch options with redirect protection.
+ * All fetch calls to user-supplied endpoints MUST use redirect: "error"
+ * to prevent SSRF via open redirect chains.
+ */
+export function safeFetchOptions(
+  options: RequestInit = {}
+): RequestInit {
+  return {
+    ...options,
+    redirect: "error"
+  };
+}
+
+/**
+ * Strict allowlist-based read-only SQL validation.
+ * Only allows single SELECT statements (with optional WITH/CTE prefix).
+ * Rejects multi-statement payloads, procedure calls, and all mutation forms.
+ */
 export function ensureReadOnlySql(query: string): void {
-  if (SQL_MUTATION_PATTERN.test(query)) {
+  const trimmed = query.trim();
+
+  // Reject empty queries
+  if (!trimmed) {
     throw new MantleMcpError(
       "INDEXER_ERROR",
-      "SQL mutation statements are not allowed.",
-      "Submit read-only SELECT queries only.",
+      "Empty SQL query.",
+      "Submit a non-empty SELECT query.",
+      { query }
+    );
+  }
+
+  // Reject multi-statement payloads (semicolons followed by more content)
+  const withoutStrings = trimmed.replace(/'[^']*'/g, "''"); // strip string literals
+  if (/;[\s]*\S/.test(withoutStrings)) {
+    throw new MantleMcpError(
+      "INDEXER_ERROR",
+      "Multi-statement SQL queries are not allowed.",
+      "Submit a single SELECT statement only.",
+      { query }
+    );
+  }
+
+  // Only allow queries starting with SELECT or WITH ... SELECT
+  const normalized = trimmed.replace(/\s+/g, " ").toLowerCase();
+  const isSelect = /^select\s/.test(normalized);
+  const isWithSelect = /^with\s/.test(normalized) && /\bselect\b/.test(normalized);
+
+  if (!isSelect && !isWithSelect) {
+    throw new MantleMcpError(
+      "INDEXER_ERROR",
+      "Only SELECT queries are allowed.",
+      "Submit a read-only SELECT or WITH ... SELECT query.",
+      { query }
+    );
+  }
+
+  // Reject known dangerous constructs even inside SELECT-like queries
+  const dangerousPatterns =
+    /\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|merge|call|exec|execute|copy|load|import|into\s+outfile|into\s+dumpfile)\b/i;
+  if (dangerousPatterns.test(normalized)) {
+    throw new MantleMcpError(
+      "INDEXER_ERROR",
+      "SQL query contains disallowed mutation or procedure keywords.",
+      "Submit a pure read-only SELECT query without mutation side-effects.",
       { query }
     );
   }

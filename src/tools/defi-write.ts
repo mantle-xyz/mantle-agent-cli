@@ -574,10 +574,15 @@ export async function buildSwap(
     findPairByAddress(provider, tokenIn.address, tokenOut.address, network);
 
   // Accept caller-provided amount_out_min (from a prior quote call)
-  const amountOutMin =
-    typeof args.amount_out_min === "string" && args.amount_out_min !== "0"
-      ? BigInt(args.amount_out_min)
-      : 0n;
+  // SAFETY: if neither amount_out_min nor a usable slippage+quote is provided,
+  // default to 0n but emit a strong warning. Callers SHOULD always supply
+  // amount_out_min from a prior mantle_getSwapQuote call.
+  let amountOutMin: bigint;
+  if (typeof args.amount_out_min === "string" && args.amount_out_min !== "0" && args.amount_out_min.trim().length > 0) {
+    amountOutMin = BigInt(args.amount_out_min);
+  } else {
+    amountOutMin = 0n;
+  }
 
   const amountInDecimal = formatUnits(amountInRaw, tokenIn.decimals);
   const deadline = d.deadline();
@@ -751,7 +756,7 @@ function buildV3Swap(params: {
   const warnings: string[] = [];
   if (amountOutMin === 0n) {
     warnings.push(
-      `amountOutMinimum is 0. Call mantle_getSwapQuote first and pass amount_out_min to avoid sandwich attacks.`
+      `WARNING: amountOutMinimum is 0 — this swap has NO slippage protection and is vulnerable to sandwich attacks. Call mantle_getSwapQuote first and pass amount_out_min.`
     );
   }
 
@@ -830,7 +835,7 @@ function buildMoeSwap(params: {
   const warnings: string[] = [];
   if (amountOutMin === 0n) {
     warnings.push(
-      `amountOutMin is 0. Call mantle_getSwapQuote first and pass amount_out_min to avoid sandwich attacks.`
+      "WARNING: amountOutMin is 0 — this swap has NO slippage protection. Call mantle_getSwapQuote first and pass amount_out_min."
     );
   }
 
@@ -899,7 +904,7 @@ function buildV3MultihopSwap(params: {
   const warnings: string[] = [];
   if (amountOutMin === 0n) {
     warnings.push(
-      "amountOutMinimum is 0. Multi-hop swaps have higher slippage risk — call mantle_getSwapQuote first."
+      "WARNING: amountOutMinimum is 0. Multi-hop swaps have higher slippage risk — call mantle_getSwapQuote first and pass amount_out_min."
     );
   }
   warnings.push(`Multi-hop route: ${hops} (fees: ${route.fees.join(" → ")})`);
