@@ -244,9 +244,16 @@ interface UnsignedTxResult {
     data: string;
     value: string;
     chainId: number;
+    /** Suggested gas limit. Wallets should use this or estimate on their own. */
+    gas?: string;
   };
   warnings: string[];
   built_at_utc: string;
+  /** Token metadata for proper decimal formatting. */
+  token_info?: {
+    token_in?: { symbol: string; decimals: number; address: string };
+    token_out?: { symbol: string; decimals: number; address: string };
+  };
   /** Present on Aave operations — the reserve's aToken and debt token. */
   aave_reserve?: {
     symbol: string;
@@ -283,6 +290,44 @@ export async function buildApprove(
       "Only whitelisted protocol contracts can be approved as spenders.",
       { spender, network }
     );
+  }
+
+  // Pre-check existing allowance (if owner is provided)
+  const owner = typeof args.owner === "string" && isAddress(args.owner, { strict: false })
+    ? getAddress(args.owner)
+    : null;
+  let existingAllowance: bigint | null = null;
+  if (owner) {
+    try {
+      const client = d.getClient(network);
+      existingAllowance = (await client.readContract({
+        address: resolved.address as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "allowance",
+        args: [owner as `0x${string}`, spender as `0x${string}`]
+      })) as bigint;
+    } catch {
+      // Allowance check failed — proceed without it
+    }
+  }
+
+  // If allowance is already sufficient, skip
+  if (existingAllowance !== null && existingAllowance >= amountRaw) {
+    const existingDecimal = formatUnits(existingAllowance, resolved.decimals);
+    return {
+      intent: "approve_skip",
+      human_summary: `SKIP: ${resolved.symbol} already approved for ${whitelistLabel(spender, network) ?? spender}. Current allowance: ${existingDecimal} (sufficient).`,
+      unsigned_tx: {
+        to: resolved.address,
+        data: "0x",
+        value: "0x0",
+        chainId: chainId(network)
+      },
+      warnings: [
+        `Existing allowance ${existingDecimal} ${resolved.symbol} is sufficient. No approve transaction needed.`
+      ],
+      built_at_utc: d.now()
+    };
   }
 
   const spenderLabel = whitelistLabel(spender, network) ?? spender;
@@ -558,7 +603,12 @@ function buildV3Swap(params: {
       to: routerAddress,
       data,
       value: "0x0",
-      chainId: chainId(network)
+      chainId: chainId(network),
+      gas: "0x493E0" // 300000 — safe default for V3 swaps
+    },
+    token_info: {
+      token_in: { symbol: tokenIn.symbol, decimals: tokenIn.decimals, address: tokenIn.address },
+      token_out: { symbol: tokenOut.symbol, decimals: tokenOut.decimals, address: tokenOut.address }
     },
     warnings,
     built_at_utc: now
@@ -615,9 +665,11 @@ function buildMoeSwap(params: {
   });
 
   const warnings: string[] = [];
-  warnings.push(
-    `amountOutMin is 0. Call mantle_getSwapQuote first and pass the quoted minimum to avoid sandwich attacks.`
-  );
+  if (amountOutMin === 0n) {
+    warnings.push(
+      `amountOutMin is 0. Call mantle_getSwapQuote first and pass amount_out_min to avoid sandwich attacks.`
+    );
+  }
 
   return {
     intent: "swap",
@@ -626,7 +678,12 @@ function buildMoeSwap(params: {
       to: routerAddress,
       data,
       value: "0x0",
-      chainId: chainId(network)
+      chainId: chainId(network),
+      gas: "0x7A120" // 500000 — safe default for LB swaps
+    },
+    token_info: {
+      token_in: { symbol: tokenIn.symbol, decimals: tokenIn.decimals, address: tokenIn.address },
+      token_out: { symbol: tokenOut.symbol, decimals: tokenOut.decimals, address: tokenOut.address }
     },
     warnings,
     built_at_utc: now
@@ -1383,13 +1440,13 @@ export const defiWriteTools: Record<string, Tool> = {
   mantle_buildApprove: {
     name: "mantle_buildApprove",
     description:
-      "Build an unsigned ERC-20 approve transaction. Validates that the spender is a whitelisted DeFi protocol contract. Returns calldata — does NOT sign or broadcast.\n\nExamples:\n- Approve WMNT for Agni SwapRouter: token='WMNT', spender='0x319B69888b0d11cEC22caA5034e25FfFBDc88421', amount='100'\n- Unlimited approve USDC for Aave Pool: token='USDC', spender='0x458F293454fE0d67EC0655f3672301301DD51422', amount='max'",
+      "Build an unsigned ERC-20 approve transaction. Validates spender is whitelisted. IMPORTANT: Pass 'owner' (the wallet address) to auto-check existing allowance — if already sufficient, returns intent='approve_skip' and you should NOT sign/broadcast.\n\nExamples:\n- Approve WMNT for Agni SwapRouter: token='WMNT', spender='0x319B69888b0d11cEC22caA5034e25FfFBDc88421', amount='100', owner='0xYourWallet'\n- Unlimited approve USDC for Aave Pool: token='USDC', spender='0x458F293454fE0d67EC0655f3672301301DD51422', amount='max', owner='0xYourWallet'",
     inputSchema: {
       type: "object",
       properties: {
         token: {
           type: "string",
-          description: "Token symbol (e.g. 'WMNT', 'USDC') or address."
+          description: "Token symbol (e.g. 'WMNT', 'USDC', 'USDT0') or address."
         },
         spender: {
           type: "string",
@@ -1400,6 +1457,11 @@ export const defiWriteTools: Record<string, Tool> = {
           type: "string",
           description:
             "Decimal amount to approve (e.g. '100'). Use 'max' for unlimited."
+        },
+        owner: {
+          type: "string",
+          description:
+            "Wallet address that owns the tokens. Used to check existing allowance and skip if sufficient."
         },
         network: {
           type: "string",
