@@ -142,6 +142,19 @@ export const MANTLE_TOKENS: Record<Network, Record<string, TokenEntry>> = {
       decimals: 18,
       name: "Circle xStock",
       symbol: "wCRCLx"
+    },
+    // Fluxion ecosystem tokens
+    BSB: {
+      address: "0xe5c330ADdf7aa9C7838dA836436142c56a15aa95",
+      decimals: 18,
+      name: "BSB",
+      symbol: "BSB"
+    },
+    ELSA: {
+      address: "0x29cC30f9D113B356Ce408667aa6433589CeCBDcA",
+      decimals: 18,
+      name: "ELSA",
+      symbol: "ELSA"
     }
   },
   sepolia: {

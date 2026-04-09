@@ -65,7 +65,9 @@ export const TOKENS = {
   FBTC: "0xC96dE26018A54D51c097160568752c4E3BD6C364",
   sUSDe: "0x211Cc4DD073734dA055fbF44a2b4667d5E5fE5d2",
   MOE: "0x4515A45337F461A11Ff0FE8aBF3c606AE5dC00c9",
-  USDT: "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+  USDT: "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE",
+  BSB: "0xe5c330ADdf7aa9C7838dA836436142c56a15aa95",
+  ELSA: "0x29cC30f9D113B356Ce408667aa6433589CeCBDcA"
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -237,6 +239,22 @@ const FLUXION_PAIRS: V3Pair[] = [
     tokenA: "USDT0", tokenB: "mETH",
     tokenAAddress: TOKENS.USDT0, tokenBAddress: TOKENS.mETH,
     pool: "0x9756d5b60fe70ba41cd4d01fe04779f556c4b75d",
+    feeTier: 3000
+  },
+
+  // ---- Ecosystem token pairs (fee_tier 3000 = 0.3%) ----
+  {
+    provider: "fluxion",
+    tokenA: "USDT0", tokenB: "BSB",
+    tokenAAddress: TOKENS.USDT0, tokenBAddress: TOKENS.BSB,
+    pool: "0xdc16ff7d202bae83b35fd7cdbba28be6b8b13f24",
+    feeTier: 3000
+  },
+  {
+    provider: "fluxion",
+    tokenA: "ELSA", tokenB: "USDT0",
+    tokenAAddress: TOKENS.ELSA, tokenBAddress: TOKENS.USDT0,
+    pool: "0xe855dae59c7abfedb47d4ae3bb0faa0b1c52a2bc",
     feeTier: 3000
   },
 
