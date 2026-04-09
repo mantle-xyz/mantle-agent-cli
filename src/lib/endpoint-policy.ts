@@ -115,24 +115,44 @@ async function rejectPrivateResolution(hostname: string): Promise<void> {
   // Skip resolution for direct IP inputs — already checked in ensureEndpointAllowed
   if (isIpv4(hostname) || isBlockedIpv6(hostname)) return;
 
-  try {
-    const addresses = await dns.resolve4(hostname).catch(() => [] as string[]);
-    const addresses6 = await dns.resolve6(hostname).catch(() => [] as string[]);
-    const allAddresses = [...addresses, ...addresses6];
+  let addresses: string[] = [];
+  let addresses6: string[] = [];
+  let resolve4Failed = false;
+  let resolve6Failed = false;
 
-    for (const addr of allAddresses) {
-      if (isPrivateIpv4(addr) || isBlockedIpv6(addr) || addr === "0.0.0.0") {
-        throw new MantleMcpError(
-          "ENDPOINT_NOT_ALLOWED",
-          `Hostname '${hostname}' resolves to private/loopback address ${addr}.`,
-          "Use a hostname that resolves to a public IP address.",
-          { hostname, resolved_address: addr }
-        );
-      }
+  try {
+    addresses = await dns.resolve4(hostname);
+  } catch {
+    resolve4Failed = true;
+  }
+
+  try {
+    addresses6 = await dns.resolve6(hostname);
+  } catch {
+    resolve6Failed = true;
+  }
+
+  // Fail closed: if BOTH lookups fail, reject — the hostname is unresolvable
+  // but fetch() might still resolve it via OS lookup / /etc/hosts / split-horizon DNS
+  if (resolve4Failed && resolve6Failed) {
+    throw new MantleMcpError(
+      "ENDPOINT_NOT_ALLOWED",
+      `Cannot resolve hostname '${hostname}'. Unresolvable hosts are rejected for safety.`,
+      "Use a hostname that resolves to a public IP address via DNS.",
+      { hostname }
+    );
+  }
+
+  const allAddresses = [...addresses, ...addresses6];
+  for (const addr of allAddresses) {
+    if (isPrivateIpv4(addr) || isBlockedIpv6(addr) || addr === "0.0.0.0") {
+      throw new MantleMcpError(
+        "ENDPOINT_NOT_ALLOWED",
+        `Hostname '${hostname}' resolves to private/loopback address ${addr}.`,
+        "Use a hostname that resolves to a public IP address.",
+        { hostname, resolved_address: addr }
+      );
     }
-  } catch (error) {
-    if (error instanceof MantleMcpError) throw error;
-    // DNS resolution failure — allow through (the fetch will fail anyway)
   }
 }
 

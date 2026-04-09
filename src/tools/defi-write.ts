@@ -573,15 +573,24 @@ export async function buildSwap(
     findPair(provider, tokenIn.symbol, tokenOut.symbol, network) ??
     findPairByAddress(provider, tokenIn.address, tokenOut.address, network);
 
-  // Accept caller-provided amount_out_min (from a prior quote call)
-  // SAFETY: if neither amount_out_min nor a usable slippage+quote is provided,
-  // default to 0n but emit a strong warning. Callers SHOULD always supply
-  // amount_out_min from a prior mantle_getSwapQuote call.
+  // Accept caller-provided amount_out_min (from a prior quote call).
+  // SAFETY: reject zero/missing amount_out_min unless explicitly opted out with
+  // allow_zero_min=true. This prevents building swap calldata with no slippage
+  // protection, which is vulnerable to sandwich attacks and MEV extraction.
+  const allowZeroMin = args.allow_zero_min === true || args.allow_zero_min === "true";
   let amountOutMin: bigint;
   if (typeof args.amount_out_min === "string" && args.amount_out_min !== "0" && args.amount_out_min.trim().length > 0) {
     amountOutMin = BigInt(args.amount_out_min);
-  } else {
+  } else if (allowZeroMin) {
     amountOutMin = 0n;
+  } else {
+    throw new MantleMcpError(
+      "MISSING_SLIPPAGE_PROTECTION",
+      "amount_out_min is required to protect against slippage and sandwich attacks.",
+      "Call mantle_getSwapQuote first to get a quote, then pass amount_out_min (or minimum_out_raw from the quote). " +
+      "Set allow_zero_min=true only if you understand the risks of unprotected swaps.",
+      { token_in: tokenIn.symbol, token_out: tokenOut.symbol, amount_in: args.amount_in }
+    );
   }
 
   const amountInDecimal = formatUnits(amountInRaw, tokenIn.decimals);
@@ -1929,7 +1938,11 @@ export const defiWriteTools: Record<string, Tool> = {
         },
         amount_out_min: {
           type: "string",
-          description: "Minimum output in raw units (from mantle_getSwapQuote). Use '0' if unknown but NOT recommended."
+          description: "REQUIRED: Minimum output in raw units (from mantle_getSwapQuote minimum_out_raw). Protects against slippage and sandwich attacks."
+        },
+        allow_zero_min: {
+          type: "boolean",
+          description: "Set to true to allow zero amount_out_min (DANGEROUS — no slippage protection). Only use for testing."
         },
         slippage_bps: {
           type: "number",

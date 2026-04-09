@@ -653,9 +653,9 @@ export class E2EAgentRunner {
       resolvedScenario.prompt
     ].join("\n\n");
     const expectedTool = this.tools[resolvedScenario.expectedToolCall];
-    const scenarioTools = expectedTool
-      ? { [resolvedScenario.expectedToolCall]: expectedTool }
-      : this.tools;
+    // Expose the FULL tool surface so the model must make the correct routing
+    // decision. If the expected tool is missing, use all tools as fallback.
+    const scenarioTools = expectedTool ? this.tools : this.tools;
 
     const maxAttempts = 1 + this.config.maxRetries;
     let lastFailure: ScenarioFailure | undefined;

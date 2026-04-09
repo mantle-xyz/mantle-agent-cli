@@ -1,7 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-export function readSkillsReference(relativePath: string, baseDir = process.cwd()): string {
+/** Resolve the package root from the module location, not process.cwd(). */
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
+
+export function readSkillsReference(relativePath: string, baseDir = PACKAGE_ROOT): string {
   const absolutePath = path.resolve(baseDir, relativePath);
 
   if (existsSync(absolutePath)) {
