@@ -161,14 +161,9 @@ const AGNI_PAIRS: V3Pair[] = [
     tokenAAddress: TOKENS.mETH, tokenBAddress: TOKENS.WETH,
     pool: "0x4f9e3683a523b66da89d82bba0a9caa1c3243df4",
     feeTier: 500 // 0.05%
-  },
-  {
-    provider: "agni",
-    tokenA: "USDT0", tokenB: "WMNT",
-    tokenAAddress: TOKENS.USDT0, tokenBAddress: TOKENS.WMNT,
-    pool: "0x07c41050a6a18040f1530d88d1d1b5e9261caf73",
-    feeTier: 500 // 0.05%
   }
+  // NOTE: USDT0/WMNT removed — pool 0x07c410... has no deployed contract
+  // and Agni factory returns zero-address at all fee tiers.
 ];
 
 // ---------------------------------------------------------------------------
