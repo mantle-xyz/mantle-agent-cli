@@ -29,6 +29,12 @@ import {
 } from "../config/protocols.js";
 import type { Tool, Network } from "../types.js";
 import { CHAIN_CONFIGS } from "../config/chains.js";
+import {
+  findReserveBySymbol,
+  findReserveByUnderlying,
+  aaveReserveSymbols,
+  type AaveReserveAsset
+} from "../config/aave-reserves.js";
 
 // ABIs
 import { WMNT_ABI } from "../lib/abis/wmnt.js";
@@ -51,6 +57,25 @@ function chainId(network: Network): number {
 /** Derive WMNT address from network config instead of hardcoding. */
 function wmntAddress(network: Network): string {
   return CHAIN_CONFIGS[network].wrapped_mnt;
+}
+
+/**
+ * Resolve an Aave reserve by symbol or underlying address.
+ * Throws if the asset is not a supported Aave V3 reserve on Mantle.
+ */
+function requireAaveReserve(symbolOrAddress: string): AaveReserveAsset {
+  const reserve =
+    findReserveBySymbol(symbolOrAddress) ??
+    findReserveByUnderlying(symbolOrAddress);
+  if (!reserve) {
+    throw new MantleMcpError(
+      "UNSUPPORTED_AAVE_ASSET",
+      `'${symbolOrAddress}' is not a supported Aave V3 reserve on Mantle.`,
+      `Supported assets: ${aaveReserveSymbols().join(", ")}.`,
+      { asset: symbolOrAddress, supported: aaveReserveSymbols() }
+    );
+  }
+  return reserve;
 }
 
 // ---------------------------------------------------------------------------
@@ -213,6 +238,14 @@ interface UnsignedTxResult {
   };
   warnings: string[];
   built_at_utc: string;
+  /** Present on Aave operations — the reserve's aToken and debt token. */
+  aave_reserve?: {
+    symbol: string;
+    underlying: string;
+    aToken: string;
+    variableDebtToken: string;
+    decimals: number;
+  };
 }
 
 // =========================================================================
@@ -995,7 +1028,8 @@ export async function buildAaveSupply(
   const { network } = normalizeNetwork(args);
 
   const assetInput = requireString(args.asset, "asset");
-  const asset = await resolveToken(d, assetInput, network);
+  const reserve = requireAaveReserve(assetInput);
+  const asset = await resolveToken(d, reserve.underlying, network);
   const amountRaw = requirePositiveAmount(
     args.amount,
     "amount",
@@ -1022,7 +1056,7 @@ export async function buildAaveSupply(
 
   return {
     intent: "aave_supply",
-    human_summary: `Supply ${amountDecimal} ${asset.symbol} to Aave V3`,
+    human_summary: `Supply ${amountDecimal} ${reserve.symbol} to Aave V3 (will receive a${reserve.symbol})`,
     unsigned_tx: {
       to: poolAddress,
       data,
@@ -1030,8 +1064,15 @@ export async function buildAaveSupply(
       chainId: chainId(network)
     },
     warnings: [
-      `Ensure ${asset.symbol} is approved for the Aave Pool (${poolAddress}) before supplying.`
+      `Ensure ${reserve.symbol} is approved for the Aave Pool (${poolAddress}) before supplying.`
     ],
+    aave_reserve: {
+      symbol: reserve.symbol,
+      underlying: reserve.underlying,
+      aToken: reserve.aToken,
+      variableDebtToken: reserve.variableDebtToken,
+      decimals: reserve.decimals
+    },
     built_at_utc: d.now()
   };
 }
@@ -1048,7 +1089,8 @@ export async function buildAaveBorrow(
   const { network } = normalizeNetwork(args);
 
   const assetInput = requireString(args.asset, "asset");
-  const asset = await resolveToken(d, assetInput, network);
+  const reserve = requireAaveReserve(assetInput);
+  const asset = await resolveToken(d, reserve.underlying, network);
   const amountRaw = requirePositiveAmount(
     args.amount,
     "amount",
@@ -1082,7 +1124,7 @@ export async function buildAaveBorrow(
   const modeLabel = interestRateMode === 2 ? "variable" : "stable";
   return {
     intent: "aave_borrow",
-    human_summary: `Borrow ${amountDecimal} ${asset.symbol} from Aave V3 (${modeLabel} rate)`,
+    human_summary: `Borrow ${amountDecimal} ${reserve.symbol} from Aave V3 (${modeLabel} rate)`,
     unsigned_tx: {
       to: poolAddress,
       data,
@@ -1093,6 +1135,13 @@ export async function buildAaveBorrow(
       "Ensure you have sufficient collateral deposited before borrowing.",
       "Monitor your health factor to avoid liquidation."
     ],
+    aave_reserve: {
+      symbol: reserve.symbol,
+      underlying: reserve.underlying,
+      aToken: reserve.aToken,
+      variableDebtToken: reserve.variableDebtToken,
+      decimals: reserve.decimals
+    },
     built_at_utc: d.now()
   };
 }
@@ -1109,7 +1158,8 @@ export async function buildAaveRepay(
   const { network } = normalizeNetwork(args);
 
   const assetInput = requireString(args.asset, "asset");
-  const asset = await resolveToken(d, assetInput, network);
+  const reserve = requireAaveReserve(assetInput);
+  const asset = await resolveToken(d, reserve.underlying, network);
   const onBehalfOf = requireAddress(
     args.on_behalf_of ?? args.recipient,
     "on_behalf_of"
@@ -1145,7 +1195,7 @@ export async function buildAaveRepay(
   const modeLabel = interestRateMode === 2 ? "variable" : "stable";
   return {
     intent: "aave_repay",
-    human_summary: `Repay ${amountDecimal} ${asset.symbol} to Aave V3 (${modeLabel} rate)`,
+    human_summary: `Repay ${amountDecimal} ${reserve.symbol} to Aave V3 (${modeLabel} rate)`,
     unsigned_tx: {
       to: poolAddress,
       data,
@@ -1153,8 +1203,15 @@ export async function buildAaveRepay(
       chainId: chainId(network)
     },
     warnings: [
-      `Ensure ${asset.symbol} is approved for the Aave Pool (${poolAddress}) before repaying.`
+      `Ensure ${reserve.symbol} is approved for the Aave Pool (${poolAddress}) before repaying.`
     ],
+    aave_reserve: {
+      symbol: reserve.symbol,
+      underlying: reserve.underlying,
+      aToken: reserve.aToken,
+      variableDebtToken: reserve.variableDebtToken,
+      decimals: reserve.decimals
+    },
     built_at_utc: d.now()
   };
 }
@@ -1171,7 +1228,8 @@ export async function buildAaveWithdraw(
   const { network } = normalizeNetwork(args);
 
   const assetInput = requireString(args.asset, "asset");
-  const asset = await resolveToken(d, assetInput, network);
+  const reserve = requireAaveReserve(assetInput);
+  const asset = await resolveToken(d, reserve.underlying, network);
   const to = requireAddress(args.to ?? args.recipient, "to");
 
   const amountRaw =
@@ -1197,7 +1255,7 @@ export async function buildAaveWithdraw(
 
   return {
     intent: "aave_withdraw",
-    human_summary: `Withdraw ${amountDecimal} ${asset.symbol} from Aave V3`,
+    human_summary: `Withdraw ${amountDecimal} ${reserve.symbol} from Aave V3`,
     unsigned_tx: {
       to: poolAddress,
       data,
@@ -1207,6 +1265,13 @@ export async function buildAaveWithdraw(
     warnings: [
       "Withdrawing collateral may lower your health factor. Check before proceeding."
     ],
+    aave_reserve: {
+      symbol: reserve.symbol,
+      underlying: reserve.underlying,
+      aToken: reserve.aToken,
+      variableDebtToken: reserve.variableDebtToken,
+      decimals: reserve.decimals
+    },
     built_at_utc: d.now()
   };
 }

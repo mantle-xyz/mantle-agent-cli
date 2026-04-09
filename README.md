@@ -134,10 +134,16 @@ Write tools enforce a whitelist. Only these contracts can be used as `spender` i
 
 ## Skills
 
-Skills provide domain-specific workflows. After installing the MCP server, also initialize the skills submodule:
+Skills provide domain-specific workflows. The local `skills/` checkout is pinned to the external [mantle-xyz/mantle-skills](https://github.com/mantle-xyz/mantle-skills) repository. After installing the MCP server, initialize the skills submodule:
 
 ```bash
 npm run skills:init
+```
+
+To refresh the pinned checkout:
+
+```bash
+npm run skills:sync
 ```
 
 Skill definitions live under `skills/skills/<skill-name>/SKILL.md`. Relevant skills for DeFi:
