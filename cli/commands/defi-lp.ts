@@ -1,12 +1,16 @@
 import type { Command } from "commander";
 import { allTools } from "../../src/tools/index.js";
-import { formatKeyValue, formatJson } from "../formatter.js";
+import { formatKeyValue, formatTable, formatJson } from "../formatter.js";
 import { parseIntegerOption, parseNumberOption, parseJsonArray } from "../utils.js";
 
 /**
  * Liquidity provision operations:
- *   lp add    — Build unsigned add-liquidity transaction
- *   lp remove — Build unsigned remove-liquidity transaction
+ *   lp add           — Build unsigned add-liquidity transaction
+ *   lp remove        — Build unsigned remove-liquidity transaction
+ *   lp positions     — List V3 LP positions for an owner
+ *   lp pool-state    — Read V3 pool on-chain state (tick, price, liquidity)
+ *   lp collect-fees  — Build unsigned fee collection transaction
+ *   lp suggest-ticks — Suggest tick ranges for V3 LP
  */
 export function registerLp(parent: Command): void {
   const group = parent
@@ -156,6 +160,179 @@ export function registerLp(parent: Command): void {
         formatJson(result);
       } else {
         formatUnsignedTxResult(result as Record<string, unknown>);
+      }
+    });
+
+  // ── positions ───────────────────────────────────────────────────────
+  group
+    .command("positions")
+    .description("List V3 LP positions for an owner across Agni and Fluxion")
+    .requiredOption("--owner <address>", "wallet address to query")
+    .option("--provider <provider>", "filter by provider: agni or fluxion")
+    .option("--include-empty", "include zero-liquidity positions", false)
+    .action(async (opts: Record<string, unknown>, cmd: Command) => {
+      const globals = cmd.optsWithGlobals();
+      const result = await allTools["mantle_getV3Positions"].handler({
+        owner: opts.owner,
+        provider: opts.provider,
+        include_empty: opts.includeEmpty,
+        network: globals.network
+      });
+      if (globals.json) {
+        formatJson(result);
+      } else {
+        const data = result as Record<string, unknown>;
+        const positions = (data.positions ?? []) as Record<string, unknown>[];
+        if (positions.length === 0) {
+          console.log("\n  No V3 LP positions found.\n");
+        } else {
+          formatTable(positions, [
+            { key: "token_id", label: "Token ID" },
+            { key: "provider", label: "Provider" },
+            {
+              key: "token0",
+              label: "Token 0",
+              format: (v) => (v as Record<string, unknown>)?.symbol as string ?? "?"
+            },
+            {
+              key: "token1",
+              label: "Token 1",
+              format: (v) => (v as Record<string, unknown>)?.symbol as string ?? "?"
+            },
+            { key: "fee", label: "Fee", align: "right" },
+            { key: "tick_lower", label: "Tick Lo", align: "right" },
+            { key: "tick_upper", label: "Tick Hi", align: "right" },
+            { key: "liquidity", label: "Liquidity", align: "right" },
+            {
+              key: "in_range",
+              label: "In Range",
+              format: (v) => v === true ? "YES" : v === false ? "NO" : "?"
+            }
+          ]);
+        }
+      }
+    });
+
+  // ── pool-state ──────────────────────────────────────────────────────
+  group
+    .command("pool-state")
+    .description("Read V3 pool on-chain state (tick, price, liquidity)")
+    .option("--pool <address>", "pool contract address (or use --token-a/--token-b/--fee-tier)")
+    .option("--token-a <token>", "first token symbol or address")
+    .option("--token-b <token>", "second token symbol or address")
+    .option(
+      "--fee-tier <tier>",
+      "V3 fee tier",
+      (v: string) => parseNumberOption(v, "--fee-tier")
+    )
+    .option("--provider <provider>", "DEX provider: agni or fluxion", "agni")
+    .action(async (opts: Record<string, unknown>, cmd: Command) => {
+      const globals = cmd.optsWithGlobals();
+      const result = await allTools["mantle_getV3PoolState"].handler({
+        pool_address: opts.pool,
+        token_a: opts.tokenA,
+        token_b: opts.tokenB,
+        fee_tier: opts.feeTier,
+        provider: opts.provider,
+        network: globals.network
+      });
+      if (globals.json) {
+        formatJson(result);
+      } else {
+        const data = result as Record<string, unknown>;
+        formatKeyValue(
+          {
+            pool: data.pool_address,
+            provider: data.provider,
+            current_tick: data.current_tick,
+            tick_spacing: data.tick_spacing,
+            liquidity: data.pool_liquidity,
+            price_0_per_1: data.price_token0_per_token1,
+            price_1_per_0: data.price_token1_per_token0
+          },
+          {
+            labels: {
+              pool: "Pool",
+              provider: "Provider",
+              current_tick: "Current Tick",
+              tick_spacing: "Tick Spacing",
+              liquidity: "Pool Liquidity",
+              price_0_per_1: "Price (token0/token1)",
+              price_1_per_0: "Price (token1/token0)"
+            }
+          }
+        );
+      }
+    });
+
+  // ── collect-fees ────────────────────────────────────────────────────
+  group
+    .command("collect-fees")
+    .description("Build unsigned V3 fee collection transaction")
+    .requiredOption("--provider <provider>", "DEX provider: agni or fluxion")
+    .requiredOption("--token-id <id>", "V3 NFT position token ID")
+    .requiredOption("--recipient <address>", "address to receive collected fees")
+    .action(async (opts: Record<string, unknown>, cmd: Command) => {
+      const globals = cmd.optsWithGlobals();
+      const result = await allTools["mantle_buildCollectFees"].handler({
+        provider: opts.provider,
+        token_id: opts.tokenId,
+        recipient: opts.recipient,
+        network: globals.network
+      });
+      if (globals.json) {
+        formatJson(result);
+      } else {
+        formatUnsignedTxResult(result as Record<string, unknown>);
+      }
+    });
+
+  // ── suggest-ticks ───────────────────────────────────────────────────
+  group
+    .command("suggest-ticks")
+    .description("Suggest tick ranges for V3 LP (wide/moderate/tight strategies)")
+    .option("--pool <address>", "pool contract address (or use --token-a/--token-b/--fee-tier)")
+    .option("--token-a <token>", "first token symbol or address")
+    .option("--token-b <token>", "second token symbol or address")
+    .option(
+      "--fee-tier <tier>",
+      "V3 fee tier",
+      (v: string) => parseNumberOption(v, "--fee-tier")
+    )
+    .option("--provider <provider>", "DEX provider: agni or fluxion", "agni")
+    .action(async (opts: Record<string, unknown>, cmd: Command) => {
+      const globals = cmd.optsWithGlobals();
+      const result = await allTools["mantle_suggestTickRange"].handler({
+        pool_address: opts.pool,
+        token_a: opts.tokenA,
+        token_b: opts.tokenB,
+        fee_tier: opts.feeTier,
+        provider: opts.provider,
+        network: globals.network
+      });
+      if (globals.json) {
+        formatJson(result);
+      } else {
+        const data = result as Record<string, unknown>;
+        console.log(`\n  Current Tick: ${data.current_tick}  Tick Spacing: ${data.tick_spacing}\n`);
+        const suggestions = (data.suggestions ?? []) as Record<string, unknown>[];
+        formatTable(suggestions, [
+          { key: "strategy", label: "Strategy" },
+          { key: "tick_lower", label: "Tick Lower", align: "right" },
+          { key: "tick_upper", label: "Tick Upper", align: "right" },
+          {
+            key: "price_lower",
+            label: "Price Lower",
+            align: "right",
+            format: (v) => Number(v).toFixed(4)
+          },
+          {
+            key: "price_upper",
+            label: "Price Upper",
+            align: "right",
+            format: (v) => Number(v).toFixed(4)
+          }
+        ]);
       }
     });
 }

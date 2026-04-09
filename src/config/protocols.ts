@@ -29,7 +29,8 @@ export const MANTLE_PROTOCOLS: Record<Network, Record<string, ProtocolEntry>> = 
       source_url: "https://app.fluxion.network",
       contracts: {
         swap_router: "0x5628a59df0ecac3f3171f877a94beb26ba6dfaa0",
-        position_manager: "0x2b70c4e7ca8e920435a5db191e066e9e3afd8db3"
+        position_manager: "0x2b70c4e7ca8e920435a5db191e066e9e3afd8db3",
+        factory: "0xF883162Ed9c7E8EF604214c964c678E40c9B737C"
       }
     },
     merchant_moe: {

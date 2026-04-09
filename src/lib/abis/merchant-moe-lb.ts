@@ -245,3 +245,94 @@ export const MOE_ROUTER_ABI = [
     outputs: [{ name: "amounts", type: "uint256[]" }]
   }
 ] as const;
+
+// ---------------------------------------------------------------------------
+// LB Pair — on-chain pool state queries
+// ---------------------------------------------------------------------------
+
+export const LB_PAIR_ABI = [
+  {
+    type: "function",
+    name: "getActiveId",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "activeId", type: "uint24" }]
+  },
+  {
+    type: "function",
+    name: "getBin",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint24" }],
+    outputs: [
+      { name: "binReserveX", type: "uint128" },
+      { name: "binReserveY", type: "uint128" }
+    ]
+  },
+  {
+    type: "function",
+    name: "getTokenX",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
+  },
+  {
+    type: "function",
+    name: "getTokenY",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
+  },
+  {
+    type: "function",
+    name: "getBinStep",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint16" }]
+  },
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "id", type: "uint256" }
+    ],
+    outputs: [{ name: "", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "totalSupply",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }]
+  }
+] as const;
+
+// ---------------------------------------------------------------------------
+// LB Factory — pair address resolution
+// ---------------------------------------------------------------------------
+
+export const LB_FACTORY_ABI = [
+  {
+    type: "function",
+    name: "getLBPairInformation",
+    stateMutability: "view",
+    inputs: [
+      { name: "tokenA", type: "address" },
+      { name: "tokenB", type: "address" },
+      { name: "binStep", type: "uint256" }
+    ],
+    outputs: [
+      {
+        name: "info",
+        type: "tuple",
+        components: [
+          { name: "binStep", type: "uint16" },
+          { name: "LBPair", type: "address" },
+          { name: "createdByOwner", type: "bool" },
+          { name: "ignoredForRouting", type: "bool" }
+        ]
+      }
+    ]
+  }
+] as const;

@@ -218,4 +218,59 @@ export function registerDefi(parent: Command): void {
         ]);
       }
     });
+
+  group
+    .command("lb-state")
+    .description("Read Merchant Moe LB pair on-chain state (active bin, reserves)")
+    .option("--pair <address>", "LB pair address (or use --token-a/--token-b/--bin-step)")
+    .option("--token-a <token>", "first token symbol or address")
+    .option("--token-b <token>", "second token symbol or address")
+    .option(
+      "--bin-step <step>",
+      "LB bin step",
+      (v: string) => parseIntegerOption(v, "--bin-step")
+    )
+    .action(async (opts: Record<string, unknown>, cmd: Command) => {
+      const globals = cmd.optsWithGlobals();
+      const result = await allTools["mantle_getLBPairState"].handler({
+        pair_address: opts.pair,
+        token_a: opts.tokenA,
+        token_b: opts.tokenB,
+        bin_step: opts.binStep,
+        network: globals.network
+      });
+      if (globals.json) {
+        formatJson(result);
+      } else {
+        const data = result as Record<string, unknown>;
+        formatKeyValue(
+          {
+            pair: data.pair_address,
+            active_id: data.active_id,
+            bin_step: data.bin_step
+          },
+          {
+            labels: {
+              pair: "LB Pair",
+              active_id: "Active Bin ID",
+              bin_step: "Bin Step"
+            }
+          }
+        );
+        const bins = (data.nearby_bins ?? []) as Record<string, unknown>[];
+        if (bins.length > 0) {
+          formatTable(bins, [
+            { key: "id", label: "Bin ID", align: "right" },
+            { key: "delta", label: "Delta", align: "right" },
+            { key: "reserve_x_decimal", label: "Reserve X", align: "right" },
+            { key: "reserve_y_decimal", label: "Reserve Y", align: "right" },
+            {
+              key: "is_active",
+              label: "Active",
+              format: (v) => v === true ? "◆" : ""
+            }
+          ]);
+        }
+      }
+    });
 }

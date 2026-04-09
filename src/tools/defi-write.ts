@@ -1733,6 +1733,91 @@ export async function getSwapPairs(
 }
 
 // =========================================================================
+// Tool 10: mantle_buildCollectFees
+// =========================================================================
+
+const UINT128_MAX = BigInt("340282366920938463463374607431768211455");
+
+export async function buildCollectFees(
+  args: Record<string, unknown>,
+  deps?: Partial<DefiWriteDeps>
+): Promise<UnsignedTxResult> {
+  const d = withDeps(deps);
+  const { network } = normalizeNetwork(args);
+
+  // Validate provider
+  const providerInput = requireString(args.provider, "provider").toLowerCase();
+  if (providerInput !== "agni" && providerInput !== "fluxion") {
+    throw new MantleMcpError(
+      "INVALID_INPUT",
+      `provider must be 'agni' or 'fluxion' for V3 fee collection.`,
+      "Use provider='agni' or provider='fluxion'.",
+      { provider: providerInput }
+    );
+  }
+  const provider = providerInput as "agni" | "fluxion";
+
+  // Validate token_id
+  const tokenIdStr = requireString(args.token_id, "token_id");
+  let tokenId: bigint;
+  try {
+    tokenId = BigInt(tokenIdStr);
+  } catch {
+    throw new MantleMcpError(
+      "INVALID_INPUT",
+      `token_id must be a valid integer.`,
+      "Provide the NFT token ID as a string (e.g. '12345').",
+      { token_id: tokenIdStr }
+    );
+  }
+  if (tokenId < 0n) {
+    throw new MantleMcpError(
+      "INVALID_INPUT",
+      `token_id must be non-negative.`,
+      "Provide a valid NFT token ID.",
+      { token_id: tokenIdStr }
+    );
+  }
+
+  // Validate recipient
+  const recipient = requireAddress(args.recipient, "recipient");
+
+  const positionManager = getContractAddress(
+    provider,
+    "position_manager",
+    network
+  );
+
+  const data = encodeFunctionData({
+    abi: V3_POSITION_MANAGER_ABI,
+    functionName: "collect",
+    args: [
+      {
+        tokenId,
+        recipient: recipient as `0x${string}`,
+        amount0Max: UINT128_MAX,
+        amount1Max: UINT128_MAX
+      }
+    ]
+  });
+
+  const providerLabel = provider === "agni" ? "Agni" : "Fluxion";
+
+  return {
+    intent: "collect_fees",
+    human_summary: `Collect accrued fees from ${providerLabel} V3 position #${tokenId} to ${recipient}`,
+    unsigned_tx: {
+      to: positionManager,
+      data,
+      value: "0x0",
+      chainId: chainId(network)
+    },
+    warnings: [],
+    built_at_utc: d.now()
+  };
+}
+
+// =========================================================================
 // Tool definitions (MCP schema)
 // =========================================================================
 
@@ -2151,5 +2236,34 @@ export const defiWriteTools: Record<string, Tool> = {
       required: []
     },
     handler: getSwapPairs
+  },
+
+  mantle_buildCollectFees: {
+    name: "mantle_buildCollectFees",
+    description:
+      "Build an unsigned transaction to collect accrued fees from a V3 LP position (Agni or Fluxion). Collects the maximum available fees for both tokens.\n\nWORKFLOW:\n1. Call mantle_getV3Positions to find positions with tokens_owed0/tokens_owed1 > 0\n2. Call mantle_buildCollectFees with the token_id\n3. Sign and broadcast the unsigned_tx\n\nExamples:\n- Collect Agni fees: provider='agni', token_id='12345', recipient='0x...'\n- Collect Fluxion fees: provider='fluxion', token_id='67890', recipient='0x...'",
+    inputSchema: {
+      type: "object",
+      properties: {
+        provider: {
+          type: "string",
+          description: "DEX provider: 'agni' or 'fluxion'."
+        },
+        token_id: {
+          type: "string",
+          description: "V3 NFT position token ID."
+        },
+        recipient: {
+          type: "string",
+          description: "Address to receive the collected fees."
+        },
+        network: {
+          type: "string",
+          description: "Network: 'mainnet' (default) or 'sepolia'."
+        }
+      },
+      required: ["provider", "token_id", "recipient"]
+    },
+    handler: buildCollectFees
   }
 };
