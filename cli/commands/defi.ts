@@ -273,4 +273,127 @@ export function registerDefi(parent: Command): void {
         }
       }
     });
+
+  group
+    .command("analyze-pool")
+    .description(
+      "Deep analysis of a V3 pool: fee APR, multi-range APR comparison, risk assessment, and investment projections"
+    )
+    .option("--pool <address>", "V3 pool address (or use --token-a/--token-b/--fee-tier/--provider)")
+    .option("--token-a <token>", "first token symbol or address")
+    .option("--token-b <token>", "second token symbol or address")
+    .option(
+      "--fee-tier <tier>",
+      "V3 fee tier (500, 3000, 10000)",
+      (v: string) => parseNumberOption(v, "--fee-tier")
+    )
+    .option("--provider <provider>", "DEX provider (agni, fluxion)")
+    .option(
+      "--investment <usd>",
+      "USD amount for return projections (default: 1000)",
+      (v: string) => parseNumberOption(v, "--investment"),
+      1000
+    )
+    .action(async (opts: Record<string, unknown>, cmd: Command) => {
+      const globals = cmd.optsWithGlobals();
+      const result = await allTools["mantle_analyzePool"].handler({
+        pool_address: opts.pool,
+        token_a: opts.tokenA,
+        token_b: opts.tokenB,
+        fee_tier: opts.feeTier,
+        provider: opts.provider,
+        investment_usd: opts.investment,
+        network: globals.network
+      });
+      if (globals.json) {
+        formatJson(result);
+      } else {
+        const data = result as Record<string, unknown>;
+        const token0 = data.token0 as Record<string, unknown>;
+        const token1 = data.token1 as Record<string, unknown>;
+        const market = data.market_data as Record<string, unknown>;
+        const risk = data.risk as Record<string, unknown>;
+        const investment = data.investment as Record<string, unknown>;
+
+        // Pool overview
+        formatKeyValue(
+          {
+            pool: data.pool_address,
+            provider: data.provider,
+            pair: `${token0.symbol} / ${token1.symbol}`,
+            fee: `${data.fee_rate_pct}%`,
+            price: `${data.current_price_token1_per_token0} ${token1.symbol}/${token0.symbol}`,
+            tvl: market.tvl_usd != null ? `$${Number(market.tvl_usd).toLocaleString()}` : "N/A",
+            volume_24h: market.volume_24h_usd != null ? `$${Number(market.volume_24h_usd).toLocaleString()}` : "N/A",
+            change_24h: market.price_change_24h_pct != null ? `${market.price_change_24h_pct}%` : "N/A",
+            base_fee_apr: market.base_fee_apr_pct != null ? `${market.base_fee_apr_pct}%` : "N/A"
+          },
+          {
+            labels: {
+              pool: "Pool",
+              provider: "Provider",
+              pair: "Pair",
+              fee: "Fee Tier",
+              price: "Current Price",
+              tvl: "TVL (USD)",
+              volume_24h: "24h Volume (USD)",
+              change_24h: "24h Price Change",
+              base_fee_apr: "Base Fee APR"
+            }
+          }
+        );
+
+        // Range analysis table
+        const ranges = (data.ranges ?? []) as Record<string, unknown>[];
+        const recommended = data.recommended_range as string | null;
+        console.log(`  Investment: $${Number(investment.amount_usd).toLocaleString()}    Recommended range: ${recommended ?? "N/A"}\n`);
+        formatTable(ranges, [
+          {
+            key: "label",
+            label: "Range",
+            format: (v) => (v === recommended ? `${v} *` : String(v))
+          },
+          { key: "fee_apr_pct", label: "Fee APR%", align: "right" },
+          { key: "concentration_factor", label: "Conc. Factor", align: "right" },
+          {
+            key: "daily_fee_usd",
+            label: "Daily Fee",
+            align: "right",
+            format: (v) => (v != null ? `$${v}` : "N/A")
+          },
+          {
+            key: "monthly_fee_usd",
+            label: "Monthly Fee",
+            align: "right",
+            format: (v) => (v != null ? `$${v}` : "N/A")
+          },
+          { key: "rebalance_risk", label: "Rebal. Risk" }
+        ]);
+
+        // Risk assessment
+        const details = (risk.details ?? []) as string[];
+        formatKeyValue(
+          {
+            overall: risk.overall,
+            tvl_risk: risk.tvl_risk,
+            volatility_risk: risk.volatility_risk,
+            concentration_risk: risk.concentration_risk
+          },
+          {
+            labels: {
+              overall: "Overall Risk",
+              tvl_risk: "TVL Risk",
+              volatility_risk: "Volatility Risk",
+              concentration_risk: "Concentration Risk"
+            }
+          }
+        );
+        if (details.length > 0) {
+          for (const detail of details) {
+            console.log(`  · ${detail}`);
+          }
+          console.log();
+        }
+      }
+    });
 }

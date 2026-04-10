@@ -1,15 +1,16 @@
 /**
- * Capability Catalog — structured self-description of every MCP tool.
+ * Capability Catalog — structured self-description of every tool.
  *
  * Each entry carries semantic metadata so an LLM can:
  *   1. Distinguish reads from writes at a glance
  *   2. Know which tools need a wallet address
  *   3. Locate the right tool via category search
  *   4. Understand call ordering via `workflow_before` hints
+ *   5. Get the exact CLI command to run
  */
 
 export interface CapabilityEntry {
-  /** Tool name as registered in MCP ListTools. */
+  /** Tool name (internal identifier). */
   id: string;
   /** Human-readable short label. */
   name: string;
@@ -21,7 +22,9 @@ export interface CapabilityEntry {
   auth: "none" | "optional" | "required";
   /** One-line purpose. */
   summary: string;
-  /** Concrete usage example (copy-pasteable args). */
+  /** CLI command template (copy-pasteable). */
+  cli_command: string;
+  /** Concrete usage example (MCP JSON args, kept for reference). */
   example: string;
   /** Tools typically called before this one. */
   workflow_before?: string[];
@@ -35,11 +38,12 @@ export function capabilityCatalog(): {
   capabilities: CapabilityEntry[];
 } {
   return {
-    version: "0.2.0",
+    version: "0.3.0",
     description:
-      "Structured capability catalog for Mantle MCP tools. " +
+      "Structured capability catalog for Mantle CLI tools. " +
       "Use category='query' for read-only lookups, 'analyze' for computed insights, " +
-      "'execute' for transaction building. Check 'auth' to know if a wallet address is needed.",
+      "'execute' for transaction building. Check 'auth' to know if a wallet address is needed. " +
+      "Always append --json for machine-readable output.",
     capabilities: CAPABILITIES
   };
 }
@@ -57,6 +61,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Return static chain configuration (chain ID, WMNT address, RPC URLs).",
+    cli_command: "mantle-cli chain info --json",
     example: "{ \"network\": \"mainnet\" }",
     tags: ["chain", "config", "network"]
   },
@@ -67,6 +72,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Live chain status: block number, gas price, sync state.",
+    cli_command: "mantle-cli chain status --json",
     example: "{ \"network\": \"mainnet\" }",
     tags: ["chain", "status", "gas", "block"]
   },
@@ -79,6 +85,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "required",
     summary: "Read native MNT balance for a wallet address.",
+    cli_command: "mantle-cli account balance <address> --json",
     example: "{ \"address\": \"0x1234...\" }",
     tags: ["account", "balance", "MNT", "wallet"]
   },
@@ -89,6 +96,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "required",
     summary: "Batch read ERC-20 token balances for a wallet across specified tokens.",
+    cli_command: "mantle-cli account token-balances <address> --tokens USDC,WMNT --json",
     example: "{ \"address\": \"0x1234...\", \"tokens\": [\"USDC\", \"WMNT\"] }",
     tags: ["account", "balance", "token", "ERC-20", "wallet"]
   },
@@ -99,6 +107,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "required",
     summary: "Batch read ERC-20 allowances for token/spender pairs granted by a wallet.",
+    cli_command: "mantle-cli account allowances <owner> --pairs USDC:0x319B... --json",
     example: "{ \"owner\": \"0x1234...\", \"pairs\": [{\"token\": \"USDC\", \"spender\": \"0x319B69888b0d11cEC22caA5034e25FfFBDc88421\"}] }",
     tags: ["account", "allowance", "approve", "wallet"]
   },
@@ -111,6 +120,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Read on-chain metadata (name, symbol, decimals, totalSupply) for a token.",
+    cli_command: "mantle-cli token info <token> --json",
     example: "{ \"token\": \"USDC\" }",
     tags: ["token", "metadata", "decimals"]
   },
@@ -121,6 +131,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Fetch current USD prices for one or more tokens (DexScreener + DefiLlama).",
+    cli_command: "mantle-cli token prices --tokens WMNT,USDC --json",
     example: "{ \"tokens\": [\"WMNT\", \"USDC\"] }",
     tags: ["token", "price", "USD"]
   },
@@ -131,6 +142,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Resolve a token symbol to its address and metadata via quick-reference + token-list cross-check.",
+    cli_command: "mantle-cli token resolve <symbol> --json",
     example: "{ \"symbol\": \"mETH\" }",
     tags: ["token", "resolve", "address"]
   },
@@ -143,6 +155,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Look up a contract or token by name/alias in the verified registry.",
+    cli_command: "mantle-cli registry resolve <identifier> --json",
     example: "{ \"identifier\": \"agni_router\" }",
     tags: ["registry", "address", "resolve", "contract"]
   },
@@ -153,6 +166,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Check if an address is a contract, EOA, or undeployed; look up registry label.",
+    cli_command: "mantle-cli registry validate <address> --json",
     example: "{ \"address\": \"0x1234...\" }",
     tags: ["registry", "validate", "contract", "EOA"]
   },
@@ -165,6 +179,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Read swap quote across Agni, Fluxion, and Merchant Moe. Returns estimated output, price impact, and minimum_out_raw for slippage protection.",
+    cli_command: "mantle-cli defi swap-quote --in <token> --out <token> --amount <n> --provider best --json",
     example: "{ \"token_in\": \"WMNT\", \"token_out\": \"USDC\", \"amount_in\": \"10\", \"provider\": \"best\" }",
     workflow_before: ["mantle_buildSwap"],
     tags: ["swap", "quote", "DEX", "price"]
@@ -176,6 +191,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Read pool reserves and total liquidity USD for a specific pool address.",
+    cli_command: "mantle-cli defi pool-liquidity <pool-address> --json",
     example: "{ \"pool_address\": \"0xABC...\", \"provider\": \"agni\" }",
     tags: ["pool", "liquidity", "reserves", "TVL"]
   },
@@ -186,6 +202,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Scan and rank candidate pools for a token pair across all Mantle DEXes.",
+    cli_command: "mantle-cli defi pool-opportunities --token-a <token> --token-b <token> --json",
     example: "{ \"token_a\": \"WMNT\", \"token_b\": \"USDC\" }",
     tags: ["pool", "opportunity", "LP", "scan", "rank"]
   },
@@ -196,6 +213,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Read protocol-level TVL for Agni, Merchant Moe, or all Mantle DeFi protocols.",
+    cli_command: "mantle-cli defi tvl --json",
     example: "{ \"protocol\": \"all\" }",
     tags: ["TVL", "protocol", "DeFi"]
   },
@@ -206,8 +224,20 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Read Aave V3 lending market data: supply APY, borrow APY, TVL, LTV, liquidation threshold.",
+    cli_command: "mantle-cli defi lending-markets --json",
     example: "{ \"protocol\": \"aave_v3\" }",
     tags: ["lending", "Aave", "APY", "supply", "borrow"]
+  },
+  {
+    id: "mantle_getLBPairState",
+    name: "Get LB Pair State",
+    category: "query",
+    mutates: false,
+    auth: "none",
+    summary: "Read on-chain state of a Merchant Moe Liquidity Book pair: active bin, reserves, nearby bins.",
+    cli_command: "mantle-cli defi lb-state --token-a <token> --token-b <token> --bin-step <step> --json",
+    example: "{ \"token_a\": \"WMNT\", \"token_b\": \"USDC\", \"bin_step\": 20 }",
+    tags: ["pool", "LB", "Merchant Moe", "bin", "state"]
   },
 
   // ── DeFi LP Read ───────────────────────────────────────────────────────
@@ -218,18 +248,9 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Read on-chain state of a Uniswap V3 pool (Agni/Fluxion): sqrtPriceX96, current tick, liquidity, prices.",
+    cli_command: "mantle-cli lp pool-state --token-a <token> --token-b <token> --fee-tier <tier> --provider <dex> --json",
     example: "{ \"token_a\": \"WMNT\", \"token_b\": \"USDC\", \"fee_tier\": 3000, \"provider\": \"agni\" }",
     tags: ["pool", "V3", "state", "tick", "price"]
-  },
-  {
-    id: "mantle_getLBPairState",
-    name: "Get LB Pair State",
-    category: "query",
-    mutates: false,
-    auth: "none",
-    summary: "Read on-chain state of a Merchant Moe Liquidity Book pair: active bin, reserves, nearby bins.",
-    example: "{ \"token_a\": \"WMNT\", \"token_b\": \"USDC\", \"bin_step\": 20 }",
-    tags: ["pool", "LB", "Merchant Moe", "bin", "state"]
   },
   {
     id: "mantle_getV3Positions",
@@ -238,6 +259,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "required",
     summary: "Enumerate all V3 LP positions for a wallet across Agni and Fluxion: tick ranges, liquidity, uncollected fees, in-range status.",
+    cli_command: "mantle-cli lp positions --owner <address> --json",
     example: "{ \"owner\": \"0x1234...\" }",
     tags: ["LP", "position", "V3", "NFT", "wallet"]
   },
@@ -248,6 +270,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Suggest tick ranges (wide/moderate/tight) for a V3 LP position with snapped tick bounds and prices.",
+    cli_command: "mantle-cli lp suggest-ticks --token-a <token> --token-b <token> --fee-tier <tier> --provider <dex> --json",
     example: "{ \"token_a\": \"WMNT\", \"token_b\": \"USDC\", \"fee_tier\": 3000, \"provider\": \"agni\" }",
     workflow_before: ["mantle_buildAddLiquidity"],
     tags: ["LP", "tick", "range", "strategy", "V3"]
@@ -259,6 +282,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Deep pool analysis: fee APR from 24h volume/TVL, multi-range APR comparison, risk scoring (TVL/volatility), and investment return projections.",
+    cli_command: "mantle-cli defi analyze-pool --token-a <token> --token-b <token> --fee-tier <tier> --provider <dex> --investment <usd> --json",
     example: "{ \"token_a\": \"WMNT\", \"token_b\": \"USDC\", \"fee_tier\": 3000, \"provider\": \"agni\" }",
     workflow_before: ["mantle_buildAddLiquidity"],
     tags: ["LP", "APR", "risk", "analysis", "yield", "pool"]
@@ -270,6 +294,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Discover all available pools for a token pair across Agni, Fluxion, and Merchant Moe by querying factory contracts on-chain.",
+    cli_command: "mantle-cli lp find-pools --token-a <token> --token-b <token> --json",
     example: "{ \"token_a\": \"USDC\", \"token_b\": \"USDe\" }",
     workflow_before: ["mantle_getV3PoolState", "mantle_analyzePool"],
     tags: ["pool", "discover", "factory", "all DEX"]
@@ -282,7 +307,8 @@ const CAPABILITIES: CapabilityEntry[] = [
     category: "execute",
     mutates: true,
     auth: "optional",
-    summary: "Build unsigned ERC-20 approve tx. Pass 'owner' to auto-skip if allowance is already sufficient.",
+    summary: "Build unsigned ERC-20 approve tx. Pass --owner to auto-skip if allowance is already sufficient.",
+    cli_command: "mantle-cli swap approve --token <token> --spender <address> --amount <n> --owner <address> --json",
     example: "{ \"token\": \"USDC\", \"spender\": \"0x319B...\", \"amount\": \"100\", \"owner\": \"0x1234...\" }",
     workflow_before: ["mantle_buildSwap", "mantle_buildAddLiquidity", "mantle_buildAaveSupply"],
     tags: ["approve", "allowance", "ERC-20", "tx"]
@@ -294,6 +320,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: true,
     auth: "none",
     summary: "Build unsigned tx to wrap MNT into WMNT.",
+    cli_command: "mantle-cli swap wrap-mnt --amount <n> --json",
     example: "{ \"amount\": \"10\" }",
     tags: ["wrap", "MNT", "WMNT", "tx"]
   },
@@ -304,6 +331,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: true,
     auth: "none",
     summary: "Build unsigned tx to unwrap WMNT back to MNT.",
+    cli_command: "mantle-cli swap unwrap-mnt --amount <n> --json",
     example: "{ \"amount\": \"10\" }",
     tags: ["unwrap", "MNT", "WMNT", "tx"]
   },
@@ -314,6 +342,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: true,
     auth: "required",
     summary: "Build unsigned swap tx on a whitelisted DEX. Requires amount_out_min from a prior quote for slippage protection.",
+    cli_command: "mantle-cli swap build-swap --provider <dex> --in <token> --out <token> --amount <n> --recipient <address> --amount-out-min <raw> --json",
     example: "{ \"provider\": \"agni\", \"token_in\": \"WMNT\", \"token_out\": \"USDC\", \"amount_in\": \"10\", \"recipient\": \"0x1234...\", \"amount_out_min\": \"7500000\" }",
     workflow_before: [],
     tags: ["swap", "DEX", "tx"]
@@ -324,7 +353,8 @@ const CAPABILITIES: CapabilityEntry[] = [
     category: "execute",
     mutates: true,
     auth: "required",
-    summary: "Build unsigned add-liquidity tx. Supports token amounts, USD amount (amount_usd), and V3/LB pools.",
+    summary: "Build unsigned add-liquidity tx. Supports token amounts, USD amount (--amount-usd), and V3/LB pools.",
+    cli_command: "mantle-cli lp add --provider <dex> --token-a <t> --token-b <t> --amount-a <n> --amount-b <n> --recipient <addr> --json",
     example: "{ \"provider\": \"agni\", \"token_a\": \"WMNT\", \"token_b\": \"USDC\", \"amount_a\": \"10\", \"amount_b\": \"8\", \"recipient\": \"0x1234...\" }",
     tags: ["LP", "add", "liquidity", "tx"]
   },
@@ -334,7 +364,8 @@ const CAPABILITIES: CapabilityEntry[] = [
     category: "execute",
     mutates: true,
     auth: "required",
-    summary: "Build unsigned remove-liquidity tx. V3: supports percentage mode. Merchant Moe: remove from specified bins.",
+    summary: "Build unsigned remove-liquidity tx. V3: supports --percentage mode. Merchant Moe: remove from specified bins.",
+    cli_command: "mantle-cli lp remove --provider <dex> --token-id <id> --percentage <1-100> --recipient <addr> --json",
     example: "{ \"provider\": \"agni\", \"token_id\": \"12345\", \"liquidity\": \"1000000\", \"recipient\": \"0x1234...\" }",
     tags: ["LP", "remove", "liquidity", "tx"]
   },
@@ -345,6 +376,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: true,
     auth: "required",
     summary: "Build unsigned tx to collect accrued fees from a V3 LP position.",
+    cli_command: "mantle-cli lp collect-fees --provider <dex> --token-id <id> --recipient <addr> --json",
     example: "{ \"provider\": \"agni\", \"token_id\": \"12345\", \"recipient\": \"0x1234...\" }",
     tags: ["LP", "fees", "collect", "V3", "tx"]
   },
@@ -355,6 +387,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: true,
     auth: "required",
     summary: "Build unsigned Aave V3 supply (deposit) tx.",
+    cli_command: "mantle-cli aave supply --asset <token> --amount <n> --on-behalf-of <addr> --json",
     example: "{ \"asset\": \"USDC\", \"amount\": \"100\", \"on_behalf_of\": \"0x1234...\" }",
     tags: ["Aave", "supply", "deposit", "lending", "tx"]
   },
@@ -365,6 +398,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: true,
     auth: "required",
     summary: "Build unsigned Aave V3 borrow tx. Requires sufficient collateral.",
+    cli_command: "mantle-cli aave borrow --asset <token> --amount <n> --on-behalf-of <addr> --json",
     example: "{ \"asset\": \"USDC\", \"amount\": \"50\", \"on_behalf_of\": \"0x1234...\" }",
     tags: ["Aave", "borrow", "lending", "tx"]
   },
@@ -374,7 +408,8 @@ const CAPABILITIES: CapabilityEntry[] = [
     category: "execute",
     mutates: true,
     auth: "required",
-    summary: "Build unsigned Aave V3 repay tx. Use amount='max' for full debt repayment.",
+    summary: "Build unsigned Aave V3 repay tx. Use --amount max for full debt repayment.",
+    cli_command: "mantle-cli aave repay --asset <token> --amount <n|max> --on-behalf-of <addr> --json",
     example: "{ \"asset\": \"USDC\", \"amount\": \"50\", \"on_behalf_of\": \"0x1234...\" }",
     tags: ["Aave", "repay", "lending", "tx"]
   },
@@ -384,7 +419,8 @@ const CAPABILITIES: CapabilityEntry[] = [
     category: "execute",
     mutates: true,
     auth: "required",
-    summary: "Build unsigned Aave V3 withdraw tx. Use amount='max' for full balance.",
+    summary: "Build unsigned Aave V3 withdraw tx. Use --amount max for full balance.",
+    cli_command: "mantle-cli aave withdraw --asset <token> --amount <n|max> --to <addr> --json",
     example: "{ \"asset\": \"USDC\", \"amount\": \"50\", \"to\": \"0x1234...\" }",
     tags: ["Aave", "withdraw", "lending", "tx"]
   },
@@ -395,6 +431,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "List known trading pairs and pool parameters for a DEX. Call before buildSwap to get correct fee_tier/bin_step.",
+    cli_command: "mantle-cli swap pairs --json",
     example: "{ \"provider\": \"agni\" }",
     workflow_before: ["mantle_buildSwap"],
     tags: ["swap", "pairs", "DEX", "config"]
@@ -408,6 +445,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Execute a GraphQL query against a Mantle subgraph endpoint.",
+    cli_command: "mantle-cli indexer subgraph --endpoint <url> --query '<graphql>' --json",
     example: "{ \"endpoint\": \"https://...\", \"query\": \"{ pools(first:5) { id } }\" }",
     tags: ["indexer", "subgraph", "GraphQL"]
   },
@@ -418,6 +456,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Execute a read-only SQL query against an indexer endpoint.",
+    cli_command: "mantle-cli indexer sql --endpoint <url> --query '<sql>' --json",
     example: "{ \"endpoint\": \"https://...\", \"query\": \"SELECT * FROM pools LIMIT 10\" }",
     tags: ["indexer", "SQL", "query"]
   },
@@ -430,6 +469,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Health-check the configured RPC endpoint: reachability, chain ID, latency.",
+    cli_command: "mantle-cli diagnostics rpc-health --json",
     example: "{ \"network\": \"mainnet\" }",
     tags: ["diagnostics", "RPC", "health"]
   },
@@ -440,6 +480,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Send an arbitrary allowed RPC call to probe an endpoint.",
+    cli_command: "mantle-cli diagnostics probe --json",
     example: "{ \"rpc_url\": \"https://...\", \"method\": \"eth_blockNumber\" }",
     tags: ["diagnostics", "RPC", "probe"]
   }

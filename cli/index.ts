@@ -14,6 +14,7 @@ import { registerAave } from "./commands/defi-aave.js";
 import { registerLp } from "./commands/defi-lp.js";
 import { registerIndexer } from "./commands/indexer.js";
 import { registerDiagnostics } from "./commands/diagnostics.js";
+import { registerCatalog } from "./commands/catalog.js";
 
 const program = new Command();
 
@@ -43,6 +44,7 @@ registerAave(program);
 registerLp(program);
 registerIndexer(program);
 registerDiagnostics(program);
+registerCatalog(program);
 
 program.parseAsync(process.argv).catch((error) => {
   const globals = program.opts();
