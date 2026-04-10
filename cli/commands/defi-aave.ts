@@ -169,7 +169,17 @@ export function registerAave(parent: Command): void {
             format: (v) => (v === null ? "N/A" : `$${Number(v).toLocaleString()}`)
           },
           { key: "ltv", label: "LTV%", align: "right" },
-          { key: "liquidation_threshold", label: "Liq Threshold%", align: "right" }
+          { key: "liquidation_threshold", label: "Liq Threshold%", align: "right" },
+          {
+            key: "isolation_mode",
+            label: "Isolation",
+            format: (v) => (v ? "YES" : "-")
+          },
+          {
+            key: "borrowable_in_isolation",
+            label: "Iso-Borrow",
+            format: (v) => (v ? "YES" : "-")
+          }
         ]);
       }
     });

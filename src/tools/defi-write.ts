@@ -88,6 +88,9 @@ import {
   findReserveBySymbol,
   findReserveByUnderlying,
   aaveReserveSymbols,
+  isolationModeSymbols,
+  isolationBorrowableSymbols,
+  AAVE_V3_MANTLE_RESERVES,
   type AaveReserveAsset
 } from "../config/aave-reserves.js";
 import {
@@ -1760,6 +1763,21 @@ export async function buildAaveSupply(
     ]
   });
 
+  const warnings: string[] = [
+    `Ensure ${reserve.symbol} is approved for the Aave Pool (${poolAddress}) before supplying.`
+  ];
+
+  // ── Isolation Mode warning ──────────────────────────────────────────
+  if (reserve.isolationMode) {
+    const ceilingUsd = reserve.debtCeilingUsd.toLocaleString("en-US");
+    const borrowable = isolationBorrowableSymbols().join(", ");
+    warnings.push(
+      `ISOLATION MODE: ${reserve.symbol} is an Isolation Mode asset (debt ceiling $${ceilingUsd}). ` +
+      `If this is your ONLY collateral you will enter Isolation Mode and can ONLY borrow: ${borrowable}. ` +
+      `Other assets (e.g. sUSDe, FBTC, wrsETH) CANNOT be borrowed in Isolation Mode.`
+    );
+  }
+
   return {
     intent: "aave_supply",
     human_summary: `Supply ${amountDecimal} ${reserve.symbol} to Aave V3 (will receive a${reserve.symbol})`,
@@ -1769,9 +1787,7 @@ export async function buildAaveSupply(
       value: "0x0",
       chainId: chainId(network)
     },
-    warnings: [
-      `Ensure ${reserve.symbol} is approved for the Aave Pool (${poolAddress}) before supplying.`
-    ],
+    warnings,
     aave_reserve: {
       symbol: reserve.symbol,
       underlying: reserve.underlying,
@@ -1827,6 +1843,75 @@ export async function buildAaveBorrow(
     ]
   });
 
+  const warnings: string[] = [
+    "Ensure you have sufficient collateral deposited before borrowing.",
+    "Monitor your health factor to avoid liquidation."
+  ];
+
+  // ── Isolation Mode preflight ────────────────────────────────────────
+  // When the requested asset is NOT borrowable in isolation, read the
+  // borrower's aToken balances to detect isolation mode and fail-closed
+  // rather than building a doomed transaction.
+  if (!reserve.borrowableInIsolation) {
+    try {
+      const client = d.getClient(network);
+      const isolationReserves = AAVE_V3_MANTLE_RESERVES.filter(r => r.isolationMode);
+      const nonIsolationReserves = AAVE_V3_MANTLE_RESERVES.filter(r => !r.isolationMode);
+
+      // Batch-read aToken balances for all reserves
+      const [isoBalances, nonIsoBalances] = await Promise.all([
+        Promise.all(
+          isolationReserves.map(r =>
+            (client.readContract({
+              address: r.aToken as `0x${string}`,
+              abi: ERC20_ABI,
+              functionName: "balanceOf",
+              args: [onBehalfOf as `0x${string}`]
+            }) as Promise<bigint>).catch(() => 0n)
+          )
+        ),
+        Promise.all(
+          nonIsolationReserves.map(r =>
+            (client.readContract({
+              address: r.aToken as `0x${string}`,
+              abi: ERC20_ABI,
+              functionName: "balanceOf",
+              args: [onBehalfOf as `0x${string}`]
+            }) as Promise<bigint>).catch(() => 0n)
+          )
+        )
+      ]);
+
+      const hasIsolationCollateral = isoBalances.some(b => b > 0n);
+      const hasNonIsolationCollateral = nonIsoBalances.some(b => b > 0n);
+
+      if (hasIsolationCollateral && !hasNonIsolationCollateral) {
+        // User is in isolation mode — cannot borrow this asset.
+        const isoAssets = isolationReserves
+          .filter((_, i) => isoBalances[i] > 0n)
+          .map(r => r.symbol)
+          .join(", ");
+        const borrowable = isolationBorrowableSymbols().join(", ");
+        throw new MantleMcpError(
+          "ISOLATION_MODE_BORROW_BLOCKED",
+          `Cannot borrow ${reserve.symbol}: borrower (${onBehalfOf}) is in Isolation Mode ` +
+          `with only ${isoAssets} as collateral. ${reserve.symbol} is not borrowable in Isolation Mode.`,
+          `In Isolation Mode you can only borrow: ${borrowable}. ` +
+          `To borrow ${reserve.symbol}, supply additional non-isolation collateral (e.g. USDC).`,
+          { borrower: onBehalfOf, collateral: isoAssets, asset: reserve.symbol }
+        );
+      }
+    } catch (e) {
+      // Re-throw our own errors; swallow RPC failures as a non-blocking warning
+      if (e instanceof MantleMcpError) throw e;
+      warnings.push(
+        `ISOLATION MODE WARNING: ${reserve.symbol} is NOT borrowable in Isolation Mode. ` +
+        `Could not verify borrower's collateral on-chain — if the borrower's only collateral ` +
+        `is an Isolation Mode asset (${isolationModeSymbols().join(", ")}), this transaction WILL REVERT.`
+      );
+    }
+  }
+
   const modeLabel = interestRateMode === 2 ? "variable" : "stable";
   return {
     intent: "aave_borrow",
@@ -1837,10 +1922,7 @@ export async function buildAaveBorrow(
       value: "0x0",
       chainId: chainId(network)
     },
-    warnings: [
-      "Ensure you have sufficient collateral deposited before borrowing.",
-      "Monitor your health factor to avoid liquidation."
-    ],
+    warnings,
     aave_reserve: {
       symbol: reserve.symbol,
       underlying: reserve.underlying,
@@ -2407,7 +2489,10 @@ export const defiWriteTools: Record<string, Tool> = {
   mantle_buildAaveSupply: {
     name: "mantle_buildAaveSupply",
     description:
-      "Build an unsigned Aave V3 supply (deposit) transaction. Remember to approve the asset for the Pool contract first.\n\nExamples:\n- Supply 100 USDC: asset='USDC', amount='100', on_behalf_of='0x...'\n- Supply 10 WMNT: asset='WMNT', amount='10', on_behalf_of='0x...'",
+      "Build an unsigned Aave V3 supply (deposit) transaction. Remember to approve the asset for the Pool contract first.\n\n" +
+      "ISOLATION MODE: WETH and WMNT are Isolation Mode assets. Supplying them as your ONLY collateral " +
+      "restricts borrows to: USDC, USDT0, USDe, GHO. Other assets CANNOT be borrowed in Isolation Mode.\n\n" +
+      "Examples:\n- Supply 100 USDC: asset='USDC', amount='100', on_behalf_of='0x...'\n- Supply 10 WMNT: asset='WMNT', amount='10', on_behalf_of='0x...'",
     inputSchema: {
       type: "object",
       properties: {
@@ -2436,7 +2521,11 @@ export const defiWriteTools: Record<string, Tool> = {
   mantle_buildAaveBorrow: {
     name: "mantle_buildAaveBorrow",
     description:
-      "Build an unsigned Aave V3 borrow transaction. Requires sufficient collateral deposited first.\n\nExamples:\n- Borrow 50 USDC at variable rate: asset='USDC', amount='50', on_behalf_of='0x...'\n- Borrow 10 WMNT at variable rate: asset='WMNT', amount='10', on_behalf_of='0x...'",
+      "Build an unsigned Aave V3 borrow transaction. Requires sufficient collateral deposited first.\n\n" +
+      "ISOLATION MODE: If the borrower's only collateral is an Isolation Mode asset (WETH, WMNT), " +
+      "they can ONLY borrow assets flagged as borrowableInIsolation: USDC, USDT0, USDe, GHO. " +
+      "Attempting to borrow other assets (sUSDe, FBTC, syrupUSDT, wrsETH, WETH, WMNT) will REVERT.\n\n" +
+      "Examples:\n- Borrow 50 USDC at variable rate: asset='USDC', amount='50', on_behalf_of='0x...'\n- Borrow 10 WMNT at variable rate: asset='WMNT', amount='10', on_behalf_of='0x...'",
     inputSchema: {
       type: "object",
       properties: {

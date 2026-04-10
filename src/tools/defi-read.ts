@@ -6,6 +6,7 @@ import { normalizeNetwork } from "../lib/network.js";
 import { resolveTokenInput as resolveTokenInputFromRegistry } from "../lib/token-registry.js";
 import type { ResolvedTokenInput } from "../lib/token-registry.js";
 import type { Tool } from "../types.js";
+import { AAVE_V3_POOL_ABI } from "../lib/abis/aave-v3-pool.js";
 
 interface SwapQuoteDeps {
   resolveTokenInput: (
@@ -157,6 +158,14 @@ interface LendingMarket {
   tvl_usd: number | null;
   ltv: number | null;
   liquidation_threshold: number | null;
+  /** True when supplying this as your ONLY collateral puts you in Isolation Mode. null = unavailable. */
+  isolation_mode: boolean | null;
+  /** Max total USD debt allowed in isolation (whole dollars). null = unavailable. 0 = not isolated. */
+  debt_ceiling_usd: number | null;
+  /** True when this asset can be borrowed by a user in Isolation Mode. null = unavailable. */
+  borrowable_in_isolation: boolean | null;
+  /** True when borrowing this asset is enabled at all. */
+  borrowing_enabled: boolean;
 }
 
 interface DexScreenerPair {
@@ -922,6 +931,11 @@ async function loadAaveV3Markets(network: "mainnet" | "sepolia"): Promise<Lendin
 
   const poolAddressesProvider = getAddress(poolAddressesProviderInput);
   const dataProvider = getAddress(dataProviderInput);
+  const poolInput = protocol.contracts.pool;
+  const poolAddress =
+    poolInput && isAddress(poolInput, { strict: false })
+      ? getAddress(poolInput)
+      : null;
   const client = getPublicClient(network);
 
   const reserves = (await client.readContract({
@@ -964,26 +978,46 @@ async function loadAaveV3Markets(network: "mainnet" | "sepolia"): Promise<Lendin
   const markets = await Promise.all(
     reserves.map(async (reserve): Promise<LendingMarket | null> => {
       const assetAddress = getAddress(reserve.tokenAddress);
-      const [reserveData, reserveConfig, assetPrice] = (await Promise.all([
+
+      // Fetch reserve data, config, price, and packed pool configuration in
+      // parallel.  The 4th call (Pool.getConfiguration) gives us isolation-mode
+      // bits that are not exposed via the ProtocolDataProvider.
+      const rpcCalls: [
+        Promise<readonly unknown[]>,
+        Promise<readonly unknown[]>,
+        Promise<bigint>,
+        Promise<bigint | null>
+      ] = [
         client.readContract({
           address: dataProvider,
           abi: AAVE_PROTOCOL_DATA_PROVIDER_ABI,
           functionName: "getReserveData",
           args: [assetAddress]
-        }),
+        }) as Promise<readonly unknown[]>,
         client.readContract({
           address: dataProvider,
           abi: AAVE_PROTOCOL_DATA_PROVIDER_ABI,
           functionName: "getReserveConfigurationData",
           args: [assetAddress]
-        }),
+        }) as Promise<readonly unknown[]>,
         client.readContract({
           address: oracle,
           abi: AAVE_ORACLE_ABI,
           functionName: "getAssetPrice",
           args: [assetAddress]
-        })
-      ])) as [readonly unknown[], readonly unknown[], bigint];
+        }) as Promise<bigint>,
+        poolAddress
+          ? (client.readContract({
+              address: poolAddress as `0x${string}`,
+              abi: AAVE_V3_POOL_ABI,
+              functionName: "getConfiguration",
+              args: [assetAddress]
+            }) as Promise<bigint>).catch(() => null as bigint | null)
+          : Promise.resolve(null as bigint | null)
+      ];
+
+      const [reserveData, reserveConfig, assetPrice, rawConfig] =
+        await Promise.all(rpcCalls);
 
       const isActive = Boolean(reserveConfig[8]);
       if (!isActive) {
@@ -994,6 +1028,29 @@ async function loadAaveV3Markets(network: "mainnet" | "sepolia"): Promise<Lendin
       const ltv = bpsToPercent(asBigInt(reserveConfig[1]));
       const liquidationThreshold = bpsToPercent(asBigInt(reserveConfig[2]));
       const stableBorrowRateEnabled = Boolean(reserveConfig[7]);
+
+      // ── Decode packed configuration bitmap for isolation-mode fields ──
+      // Bit layout (Aave V3 ReserveConfiguration):
+      //   58  — borrowingEnabled
+      //   61  — borrowableInIsolation
+      //   212-251 — debtCeiling (40 bits, stored with 2 USD decimals)
+      //
+      // When the Pool.getConfiguration call fails (rawConfig === null), we set
+      // isolation fields to null so callers know the data is unavailable rather
+      // than silently presenting false/0 as authoritative.
+      let borrowingEnabled = Boolean(reserveConfig[6]); // fallback from data provider
+      let borrowableInIsolation: boolean | null = null;
+      let debtCeilingUsd: number | null = null;
+      let isolationMode: boolean | null = null;
+
+      if (rawConfig !== null) {
+        const cfg = BigInt(rawConfig);
+        borrowingEnabled = Boolean((cfg >> 58n) & 1n);
+        borrowableInIsolation = Boolean((cfg >> 61n) & 1n);
+        const debtCeilingRaw = Number((cfg >> 212n) & 0xFFFFFFFFFFn); // 40 bits
+        debtCeilingUsd = debtCeilingRaw / 100; // on-chain stores 2 decimal places
+        isolationMode = debtCeilingUsd > 0;
+      }
 
       const totalAToken = asBigInt(reserveData[2]);
       const liquidityRate = asBigInt(reserveData[5]);
@@ -1013,7 +1070,11 @@ async function loadAaveV3Markets(network: "mainnet" | "sepolia"): Promise<Lendin
         borrow_apy_stable: stableBorrowRateEnabled ? rayToPercent(stableBorrowRate) : null,
         tvl_usd: tvlUsd,
         ltv,
-        liquidation_threshold: liquidationThreshold
+        liquidation_threshold: liquidationThreshold,
+        isolation_mode: isolationMode,
+        debt_ceiling_usd: debtCeilingUsd,
+        borrowable_in_isolation: borrowableInIsolation,
+        borrowing_enabled: borrowingEnabled
       };
     })
   );
@@ -2251,7 +2312,12 @@ export const defiReadTools: Record<string, Tool> = {
   getLendingMarkets: {
     name: "mantle_getLendingMarkets",
     description:
-      "Read Aave v3 lending market metrics on Mantle. Examples: USDC market 0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9 with pool 0x458F293454fE0d67EC0655f3672301301DD51422.",
+      "Read Aave V3 lending market metrics on Mantle, including Isolation Mode data.\n\n" +
+      "Each market includes: supply/borrow APY, TVL, LTV, liquidation threshold, " +
+      "isolation_mode (bool), debt_ceiling_usd, borrowable_in_isolation (bool), borrowing_enabled.\n\n" +
+      "Isolation Mode assets (WETH, WMNT): supplying them as your ONLY collateral restricts " +
+      "borrows to assets with borrowable_in_isolation=true (USDC, USDT0, USDe, GHO).\n\n" +
+      "Examples:\n- All markets: protocol='aave_v3'\n- Single market: protocol='aave_v3', asset='USDC'",
     inputSchema: {
       type: "object",
       properties: {

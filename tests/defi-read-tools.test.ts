@@ -235,7 +235,11 @@ describe("defi read tools", () => {
             borrow_apy_stable: null,
             tvl_usd: null,
             ltv: 80,
-            liquidation_threshold: 85
+            liquidation_threshold: 85,
+            isolation_mode: false,
+            debt_ceiling_usd: 0,
+            borrowable_in_isolation: true,
+            borrowing_enabled: true
           }
         ],
         now: () => "2026-02-28T00:00:00.000Z"
@@ -524,7 +528,11 @@ describe("defi read tools", () => {
             borrow_apy_stable: null,
             tvl_usd: 1000000,
             ltv: 80,
-            liquidation_threshold: 85
+            liquidation_threshold: 85,
+            isolation_mode: false,
+            debt_ceiling_usd: 0,
+            borrowable_in_isolation: true,
+            borrowing_enabled: true
           }
         ],
         marketProviderFromIndexer: async () => []

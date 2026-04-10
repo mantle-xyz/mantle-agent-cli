@@ -57,6 +57,15 @@ export const AAVE_V3_POOL_ABI = [
     outputs: [{ name: "", type: "uint256" }]
   },
 
+  // ---- Configuration (packed bitmap) ----
+  {
+    type: "function",
+    name: "getConfiguration",
+    stateMutability: "view",
+    inputs: [{ name: "asset", type: "address" }],
+    outputs: [{ name: "configuration", type: "uint256" }]
+  },
+
   // ---- Read helpers (useful for pre-checks) ----
   {
     type: "function",
