@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getLBPositions } from "@0xwh1sker/mantle-core/tools/defi-lp-read.js";
+import { getLBPositions } from "@mantleio/mantle-core/tools/defi-lp-read.js";
 
 describe("LB positions tool", () => {
   it("returns empty when no known pairs exist", async () => {

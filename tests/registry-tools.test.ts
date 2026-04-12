@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { MantleMcpError } from "@0xwh1sker/mantle-core/errors.js";
-import { resolveAddress, validateAddress } from "@0xwh1sker/mantle-core/tools/registry.js";
+import { MantleMcpError } from "@mantleio/mantle-core/errors.js";
+import { resolveAddress, validateAddress } from "@mantleio/mantle-core/tools/registry.js";
 
 describe("registry tools", () => {
   it("resolves a known token from registry", async () => {

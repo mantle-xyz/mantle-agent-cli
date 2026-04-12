@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allTools } from "@0xwh1sker/mantle-core/tools/index.js";
+import { allTools } from "@mantleio/mantle-core/tools/index.js";
 
 describe("tool descriptions", () => {
   it("includes concrete Examples and validates full address formatting when present", () => {

@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { allTools } from "@0xwh1sker/mantle-core/tools/index.js";
+import { allTools } from "@mantleio/mantle-core/tools/index.js";
 import { formatKeyValue, formatTable, formatJson } from "../formatter.js";
 
 const VALID_RATE_MODES = [1, 2] as const;

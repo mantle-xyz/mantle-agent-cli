@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { readSkillsReference, isSkillsCheckoutAvailable } from "@0xwh1sker/mantle-mcp/lib/skills-path.js";
+import { readSkillsReference, isSkillsCheckoutAvailable } from "@mantleio/mantle-mcp/lib/skills-path.js";
 
 describe("readSkillsReference", () => {
   it("tells the operator how to initialize the skills checkout when it is missing", () => {

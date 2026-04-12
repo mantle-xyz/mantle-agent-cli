@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAavePositions } from "@0xwh1sker/mantle-core/tools/defi-lending-read.js";
+import { getAavePositions } from "@mantleio/mantle-core/tools/defi-lending-read.js";
 
 // ---------------------------------------------------------------------------
 // Mock helpers

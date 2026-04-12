@@ -1,10 +1,10 @@
-import { CHAIN_CONFIGS } from "@0xwh1sker/mantle-core/config/chains.js";
-import { getRegistryData } from "@0xwh1sker/mantle-core/lib/registry.js";
+import { CHAIN_CONFIGS } from "@mantleio/mantle-core/config/chains.js";
+import { getRegistryData } from "@mantleio/mantle-core/lib/registry.js";
 import { readSkillsReference, isSkillsCheckoutAvailable } from "./lib/skills-path.js";
-import { MANTLE_TOKENS } from "@0xwh1sker/mantle-core/config/tokens.js";
-import { MANTLE_PROTOCOLS } from "@0xwh1sker/mantle-core/config/protocols.js";
-import { capabilityCatalog } from "@0xwh1sker/mantle-core/capability-catalog.js";
-import type { Resource } from "@0xwh1sker/mantle-core/types.js";
+import { MANTLE_TOKENS } from "@mantleio/mantle-core/config/tokens.js";
+import { MANTLE_PROTOCOLS } from "@mantleio/mantle-core/config/protocols.js";
+import { capabilityCatalog } from "@mantleio/mantle-core/capability-catalog.js";
+import type { Resource } from "@mantleio/mantle-core/types.js";
 
 const RESOURCES: Resource[] = [
   {

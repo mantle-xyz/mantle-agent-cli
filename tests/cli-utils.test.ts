@@ -6,7 +6,7 @@ import {
   applyRpcOverride,
   parseIntegerOption,
   parseNumberOption
-} from "@0xwh1sker/mantle-cli/utils.js";
+} from "@mantleio/mantle-cli/utils.js";
 
 describe("parseCommaList", () => {
   it("splits comma-separated values", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAaveSetCollateral } from "@0xwh1sker/mantle-core/tools/defi-write.js";
+import { buildAaveSetCollateral } from "@mantleio/mantle-core/tools/defi-write.js";
 
 // ---------------------------------------------------------------------------
 // Mock helpers

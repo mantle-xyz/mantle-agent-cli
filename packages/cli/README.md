@@ -1,17 +1,17 @@
-# @0xwh1sker/mantle-cli
+# @mantleio/mantle-cli
 
 CLI for Mantle L2 chain reads, DeFi queries, swaps, LP, and Aave operations.
 
 ## Install
 
 ```bash
-npm install -g @0xwh1sker/mantle-cli
+npm install -g @mantleio/mantle-cli
 ```
 
 Or use directly with npx:
 
 ```bash
-npx @0xwh1sker/mantle-cli chain info
+npx @mantleio/mantle-cli chain info
 ```
 
 ## Discover Commands First
@@ -47,8 +47,8 @@ mantle-cli --help
 
 ## Related packages
 
-- [`@0xwh1sker/mantle-core`](https://www.npmjs.com/package/@0xwh1sker/mantle-core) — shared Mantle L2 business logic
-- [`@0xwh1sker/mantle-mcp`](https://www.npmjs.com/package/@0xwh1sker/mantle-mcp) — MCP server for AI agents
+- [`@mantleio/mantle-core`](https://www.npmjs.com/package/@mantleio/mantle-core) — shared Mantle L2 business logic
+- [`@mantleio/mantle-mcp`](https://www.npmjs.com/package/@mantleio/mantle-mcp) — MCP server for AI agents
 
 ## License
 

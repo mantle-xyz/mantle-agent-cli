@@ -5,7 +5,7 @@ import {
   getPoolOpportunities,
   getProtocolTvl,
   getSwapQuote
-} from "@0xwh1sker/mantle-core/tools/defi-read.js";
+} from "@mantleio/mantle-core/tools/defi-read.js";
 
 describe("defi read tools", () => {
   afterEach(() => {

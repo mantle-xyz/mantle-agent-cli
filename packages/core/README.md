@@ -1,11 +1,11 @@
-# @0xwh1sker/mantle-core
+# @mantleio/mantle-core
 
 Shared business logic for Mantle L2 tooling — chain reads, DeFi queries, and unsigned transaction building.
 
 ## Install
 
 ```bash
-npm install @0xwh1sker/mantle-core
+npm install @mantleio/mantle-core
 ```
 
 ## What's included
@@ -20,7 +20,7 @@ npm install @0xwh1sker/mantle-core
 ## Usage
 
 ```ts
-import { allTools } from "@0xwh1sker/mantle-core/tools/index.js";
+import { allTools } from "@mantleio/mantle-core/tools/index.js";
 
 const result = await allTools["mantle_getChainInfo"].handler({ network: "mainnet" });
 console.log(result);
@@ -28,8 +28,8 @@ console.log(result);
 
 ## Related packages
 
-- [`@0xwh1sker/mantle-cli`](https://www.npmjs.com/package/@0xwh1sker/mantle-cli) — CLI interface built on mantle-core
-- [`@0xwh1sker/mantle-mcp`](https://www.npmjs.com/package/@0xwh1sker/mantle-mcp) — MCP server for AI agents
+- [`@mantleio/mantle-cli`](https://www.npmjs.com/package/@mantleio/mantle-cli) — CLI interface built on mantle-core
+- [`@mantleio/mantle-mcp`](https://www.npmjs.com/package/@mantleio/mantle-mcp) — MCP server for AI agents
 
 ## License
 

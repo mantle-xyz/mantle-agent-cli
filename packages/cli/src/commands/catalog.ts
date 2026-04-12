@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { capabilityCatalog, type CapabilityEntry } from "@0xwh1sker/mantle-core/capability-catalog.js";
+import { capabilityCatalog, type CapabilityEntry } from "@mantleio/mantle-core/capability-catalog.js";
 import { formatTable, formatJson } from "../formatter.js";
 
 export function registerCatalog(parent: Command): void {

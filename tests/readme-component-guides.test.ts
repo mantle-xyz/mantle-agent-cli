@@ -6,7 +6,7 @@ describe("component readmes", () => {
     expect(existsSync("packages/core/README.md")).toBe(true);
 
     const readme = readFileSync("packages/core/README.md", "utf8");
-    expect(readme).toContain("# @0xwh1sker/mantle-core");
+    expect(readme).toContain("# @mantleio/mantle-core");
     expect(readme).toContain("tools/");
     expect(readme).toContain("lib/");
     expect(readme).toContain("config/");
@@ -16,7 +16,7 @@ describe("component readmes", () => {
     expect(existsSync("packages/cli/README.md")).toBe(true);
 
     const readme = readFileSync("packages/cli/README.md", "utf8");
-    expect(readme).toContain("# @0xwh1sker/mantle-cli");
+    expect(readme).toContain("# @mantleio/mantle-cli");
     expect(readme).toContain("mantle-cli");
     expect(readme).toContain("catalog list --json");
     expect(readme).toContain("catalog search");
@@ -28,7 +28,7 @@ describe("component readmes", () => {
     expect(existsSync("packages/mcp/README.md")).toBe(true);
 
     const readme = readFileSync("packages/mcp/README.md", "utf8");
-    expect(readme).toContain("# @0xwh1sker/mantle-mcp");
+    expect(readme).toContain("# @mantleio/mantle-mcp");
     expect(readme).toContain("mantle-mcp");
   });
 });

@@ -14,7 +14,7 @@ Add to your `.mcp.json` or Claude Code `settings.json`:
     "mantle": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@0xwh1sker/mantle-mcp"]
+      "args": ["-y", "@mantleio/mantle-mcp"]
     }
   }
 }
@@ -171,9 +171,9 @@ npm test
 ## CLI
 
 ```bash
-npx @0xwh1sker/mantle-cli chain info
-npx @0xwh1sker/mantle-cli registry resolve USDC --json
-npx @0xwh1sker/mantle-cli token prices --tokens USDC,WETH --json
+npx @mantleio/mantle-cli chain info
+npx @mantleio/mantle-cli registry resolve USDC --json
+npx @mantleio/mantle-cli token prices --tokens USDC,WETH --json
 ```
 
 ## Packages
@@ -182,9 +182,9 @@ This monorepo produces three independently publishable packages:
 
 | Package | Description |
 |---------|-------------|
-| [`@0xwh1sker/mantle-core`](packages/core/README.md) | Shared business logic — tools, config, and chain interaction |
-| [`@0xwh1sker/mantle-cli`](packages/cli/README.md) | CLI for chain reads, DeFi queries, and transaction building |
-| [`@0xwh1sker/mantle-mcp`](packages/mcp/README.md) | MCP server for AI agents |
+| [`@mantleio/mantle-core`](packages/core/README.md) | Shared business logic — tools, config, and chain interaction |
+| [`@mantleio/mantle-cli`](packages/cli/README.md) | CLI for chain reads, DeFi queries, and transaction building |
+| [`@mantleio/mantle-mcp`](packages/mcp/README.md) | MCP server for AI agents |
 
 ## Documentation
 

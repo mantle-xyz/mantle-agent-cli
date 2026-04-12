@@ -2,7 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import { Command } from "commander";
-import { MantleMcpError } from "@0xwh1sker/mantle-core/errors.js";
+import { MantleMcpError } from "@mantleio/mantle-core/errors.js";
 import { disableColors, formatError, formatJson } from "./formatter.js";
 import { applyRpcOverride } from "./utils.js";
 import { registerChain } from "./commands/chain.js";

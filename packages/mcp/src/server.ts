@@ -9,10 +9,10 @@ import {
   ListToolsRequestSchema,
   ReadResourceRequestSchema
 } from "@modelcontextprotocol/sdk/types.js";
-import { MantleMcpError, toErrorPayload } from "@0xwh1sker/mantle-core/errors.js";
+import { MantleMcpError, toErrorPayload } from "@mantleio/mantle-core/errors.js";
 import { getPromptMessages, prompts } from "./prompts.js";
 import { listResources, prefetchResources, readResource } from "./resources.js";
-import { allTools } from "@0xwh1sker/mantle-core/tools/index.js";
+import { allTools } from "@mantleio/mantle-core/tools/index.js";
 
 const pkg = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
