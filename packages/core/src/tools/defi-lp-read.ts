@@ -26,7 +26,7 @@ import {
   LB_PAIR_ABI,
   LB_FACTORY_ABI
 } from "../lib/abis/merchant-moe-lb.js";
-import { listPairs, type MoePair } from "../config/dex-pairs.js";
+import { listPairs, listAllPairs, TOKENS as DEX_TOKENS, type MoePair, type V3Pair, type DexPair } from "../config/dex-pairs.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1406,7 +1406,569 @@ async function findPools(
 }
 
 // =========================================================================
-// Tool 7: mantle_getLBPositions
+// Tool 7: mantle_discoverTopPools
+// =========================================================================
+
+/**
+ * DexScreener pair shape returned by the /token-pairs/v1 and
+ * /latest/dex/pairs endpoints. Kept minimal – only fields we read.
+ */
+interface DSPairForDiscovery {
+  chainId?: string;
+  dexId?: string;
+  pairAddress?: string;
+  baseToken?: { address?: string; symbol?: string; name?: string };
+  quoteToken?: { address?: string; symbol?: string; name?: string };
+  priceUsd?: string;
+  liquidity?: { usd?: number | string | null };
+  volume?: { h24?: number | string | null; h6?: number | string | null };
+  priceChange?: { h24?: number | string | null; h6?: number | string | null };
+  fdv?: number | null;
+}
+
+/**
+ * Map DexScreener dexId → our internal provider name.
+ * Fluxion uses its factory address as dexId on DexScreener.
+ */
+function dexIdToProviderName(
+  dexId: string | undefined
+): "agni" | "fluxion" | "merchant_moe" | null {
+  const id = (dexId ?? "").toLowerCase();
+  if (id === "agni") return "agni";
+  if (id === "merchantmoe") return "merchant_moe";
+  // Fluxion factory address
+  if (id === "0xf883162ed9c7e8ef604214c964c678e40c9b737c") return "fluxion";
+  return null;
+}
+
+/**
+ * Inline ABI to read fee() from a Uniswap V3 pool.
+ */
+const V3_FEE_READ_ABI = [
+  {
+    type: "function" as const,
+    name: "fee" as const,
+    stateMutability: "view" as const,
+    inputs: [],
+    outputs: [{ name: "", type: "uint24" as const }]
+  }
+] as const;
+
+/**
+ * Inline ABI to read getStaticFeeParameters() from a Merchant Moe LB V2.2 pair.
+ *
+ * Returns baseFactor, filterPeriod, decayPeriod, reductionFactor,
+ * variableFeeControl, protocolShare, maxVolatilityAccumulator.
+ * We only need baseFactor to compute the base fee.
+ */
+const LB_STATIC_FEE_PARAMS_ABI = [
+  {
+    type: "function" as const,
+    name: "getStaticFeeParameters" as const,
+    stateMutability: "view" as const,
+    inputs: [],
+    outputs: [
+      { name: "baseFactor", type: "uint16" as const },
+      { name: "filterPeriod", type: "uint16" as const },
+      { name: "decayPeriod", type: "uint16" as const },
+      { name: "reductionFactor", type: "uint16" as const },
+      { name: "variableFeeControl", type: "uint24" as const },
+      { name: "protocolShare", type: "uint16" as const },
+      { name: "maxVolatilityAccumulator", type: "uint24" as const }
+    ]
+  }
+] as const;
+
+interface TopPoolEntry {
+  rank: number;
+  pool_address: string;
+  provider: string;
+  token_a: { symbol: string; address: string };
+  token_b: { symbol: string; address: string };
+  fee_tier?: number;
+  fee_rate_pct: number;
+  /** Whether fee_rate_pct was read from authoritative on-chain data. */
+  fee_verified: boolean;
+  bin_step?: number;
+  tvl_usd: number | null;
+  volume_24h_usd: number | null;
+  fee_apr_pct: number | null;
+  /** Whether fee_apr_pct is based on verified on-chain fee or an estimate. */
+  apr_verified: boolean;
+  price_change_24h_pct: number | null;
+  source: "registry" | "discovered";
+}
+
+type DiscoveryStatus = "complete" | "partial" | "degraded";
+
+/**
+ * Discover the top LP pools on Mantle DEXes.
+ *
+ * Strategy:
+ *   1. Collect all known pool addresses from the registry.
+ *   2. Query DexScreener for each major base token on Mantle to discover
+ *      additional pools (including trending meme tokens).
+ *   3. Batch-fetch DexScreener data for registry pools not yet covered.
+ *   4. For V3 pools, read fee() on-chain; for LB pools, read
+ *      getStaticFeeParameters() on-chain for authoritative fee data.
+ *   5. Calculate fee APR = (volume24h × feeRate × 365) / TVL.
+ *   6. Sort by the requested metric and return top N.
+ *
+ * Discovery completeness is tracked and reported via discovery_status.
+ */
+async function discoverTopPools(
+  args: Record<string, unknown>
+): Promise<unknown> {
+  const { network } = normalizeNetwork(args);
+  const sortBy = typeof args.sort_by === "string" ? args.sort_by : "volume";
+  const minTvl = typeof args.min_tvl_usd === "number" ? args.min_tvl_usd : 0;
+  const limit = typeof args.limit === "number" ? Math.min(Math.max(args.limit, 1), 50) : 20;
+  const providerFilter =
+    typeof args.provider === "string" ? args.provider.toLowerCase() : null;
+
+  const chainId = resolveDexScreenerChain(network);
+  if (!chainId) {
+    return {
+      error: "DexScreener is not available for this network.",
+      top_pools: [],
+      total_scanned: 0,
+      discovery_status: "degraded" as DiscoveryStatus
+    };
+  }
+
+  const client = getPublicClient(network);
+  const warnings: string[] = [];
+
+  // ── Step 1: Build registry lookup ──────────────────────────────────────
+  // FIX-3: Store registry token addresses alongside symbols so we never
+  // mix DexScreener's baseToken/quoteToken ordering with registry symbols.
+  const allPairs = listAllPairs();
+  const registryByAddr = new Map<
+    string,
+    {
+      provider: string;
+      fee_tier?: number;
+      bin_step?: number;
+      tokenA: string;
+      tokenB: string;
+      tokenAAddress: string;
+      tokenBAddress: string;
+    }
+  >();
+
+  for (const pair of allPairs) {
+    const addr = pair.pool.toLowerCase();
+    registryByAddr.set(addr, {
+      provider: pair.provider,
+      fee_tier: "feeTier" in pair ? pair.feeTier : undefined,
+      bin_step: "binStep" in pair ? pair.binStep : undefined,
+      tokenA: pair.tokenA,
+      tokenB: pair.tokenB,
+      tokenAAddress: pair.tokenAAddress,
+      tokenBAddress: pair.tokenBAddress
+    });
+  }
+
+  // ── Step 2: Discover pools via DexScreener token-pairs queries ─────────
+  // FIX-1: Track query success/failure for completeness reporting.
+  const DISCOVERY_TOKENS = [
+    DEX_TOKENS.WMNT,
+    DEX_TOKENS.USDC,
+    DEX_TOKENS.USDT0,
+    DEX_TOKENS.WETH,
+    DEX_TOKENS.mETH,
+    DEX_TOKENS.USDT,
+    DEX_TOKENS.USDe
+  ];
+
+  const poolDataMap = new Map<string, DSPairForDiscovery>();
+  let seedQueriesSucceeded = 0;
+  let seedQueriesFailed = 0;
+
+  const tokenPairPromises = DISCOVERY_TOKENS.map(async (tokenAddr) => {
+    const url = `${DEXSCREENER_API_BASE}/token-pairs/v1/${chainId}/${tokenAddr}`;
+    const payload = await fetchJsonSafe(url);
+    return Array.isArray(payload) ? (payload as DSPairForDiscovery[]) : [];
+  });
+
+  const tokenPairResults = await Promise.allSettled(tokenPairPromises);
+
+  for (const result of tokenPairResults) {
+    if (result.status !== "fulfilled" || result.value.length === 0) {
+      seedQueriesFailed++;
+      continue;
+    }
+    seedQueriesSucceeded++;
+    for (const pair of result.value) {
+      const addr = pair.pairAddress?.toLowerCase();
+      if (!addr) continue;
+      const provider = dexIdToProviderName(pair.dexId);
+      if (!provider) continue;
+      const existing = poolDataMap.get(addr);
+      if (!existing) {
+        poolDataMap.set(addr, pair);
+      }
+    }
+  }
+
+  if (seedQueriesFailed > 0) {
+    warnings.push(
+      `${seedQueriesFailed}/${DISCOVERY_TOKENS.length} DexScreener seed-token queries failed or returned empty. ` +
+      `Some pools may be missing from results.`
+    );
+  }
+
+  // ── Step 3: Batch-fetch registry pools not yet covered ─────────────────
+  const registryAddresses = Array.from(registryByAddr.keys());
+  const missingAddresses = registryAddresses.filter((a) => !poolDataMap.has(a));
+  let registryBackfillFailed = 0;
+
+  if (missingAddresses.length > 0) {
+    const BATCH = 30;
+    const batchPromises: Promise<boolean>[] = [];
+    for (let i = 0; i < missingAddresses.length; i += BATCH) {
+      const batch = missingAddresses.slice(i, i + BATCH);
+      batchPromises.push(
+        (async () => {
+          const url = `${DEXSCREENER_API_BASE}/latest/dex/pairs/${chainId}/${batch.join(",")}`;
+          const payload = await fetchJsonSafe(url);
+          if (
+            payload &&
+            typeof payload === "object" &&
+            Array.isArray(payload.pairs)
+          ) {
+            for (const pair of payload.pairs as DSPairForDiscovery[]) {
+              const addr = pair.pairAddress?.toLowerCase();
+              if (addr && !poolDataMap.has(addr)) {
+                poolDataMap.set(addr, pair);
+              }
+            }
+            return true;
+          }
+          return false;
+        })()
+      );
+    }
+    const backfillResults = await Promise.allSettled(batchPromises);
+    for (const r of backfillResults) {
+      if (r.status !== "fulfilled" || r.value === false) {
+        registryBackfillFailed++;
+      }
+    }
+    if (registryBackfillFailed > 0) {
+      warnings.push(
+        `${registryBackfillFailed} DexScreener batch query failed for registry pool backfill. ` +
+        `Some registry pools lack TVL/volume data.`
+      );
+    }
+  }
+
+  // FIX-1: Compute discovery_status based on query success rates.
+  let discoveryStatus: DiscoveryStatus = "complete";
+  if (seedQueriesSucceeded === 0) {
+    discoveryStatus = "degraded";
+    warnings.push(
+      "All DexScreener queries failed. Results are limited to registry pools without market data."
+    );
+  } else if (seedQueriesFailed > 0 || registryBackfillFailed > 0) {
+    discoveryStatus = "partial";
+  }
+
+  // ── Step 4a: Read fee() on-chain for V3 pools ─────────────────────────
+  // Discovered V3 pools need fee() read. Registry V3 pools already have
+  // fee_tier so they are authoritative.
+  const needV3FeeRead: Array<{ addr: string; poolAddr: `0x${string}` }> = [];
+  for (const [addr] of poolDataMap) {
+    if (!registryByAddr.has(addr)) {
+      const pair = poolDataMap.get(addr)!;
+      const provider = dexIdToProviderName(pair.dexId);
+      if (provider === "agni" || provider === "fluxion") {
+        needV3FeeRead.push({
+          addr,
+          poolAddr: (pair.pairAddress ?? addr) as `0x${string}`
+        });
+      }
+    }
+  }
+
+  const v3FeeByAddr = new Map<string, number>();
+  if (needV3FeeRead.length > 0) {
+    const feeCalls = needV3FeeRead.map((item) => ({
+      address: item.poolAddr,
+      abi: V3_FEE_READ_ABI,
+      functionName: "fee" as const
+    }));
+    try {
+      const feeResults = await client.multicall({ contracts: feeCalls });
+      for (let i = 0; i < needV3FeeRead.length; i++) {
+        const result = feeResults[i];
+        if (result.status === "success" && typeof result.result === "number") {
+          v3FeeByAddr.set(needV3FeeRead[i].addr, result.result);
+        }
+      }
+    } catch {
+      warnings.push("V3 fee multicall failed; discovered V3 pool APR will be unavailable.");
+    }
+  }
+
+  // ── Step 4b: Read getStaticFeeParameters() on-chain for ALL LB pools ──
+  // FIX-2: Read authoritative baseFactor from chain instead of guessing.
+  // baseFee (as fraction) = baseFactor * binStep * 1e-8
+  // baseFee (as %) = baseFactor * binStep / 1e6
+  const lbPoolsToRead: Array<{
+    addr: string;
+    poolAddr: `0x${string}`;
+    binStep: number | null;
+  }> = [];
+
+  for (const [addr, data] of poolDataMap) {
+    const reg = registryByAddr.get(addr);
+    const provider = reg?.provider ?? dexIdToProviderName(data.dexId);
+    if (provider === "merchant_moe") {
+      lbPoolsToRead.push({
+        addr,
+        poolAddr: (data.pairAddress ?? addr) as `0x${string}`,
+        binStep: reg?.bin_step ?? null
+      });
+    }
+  }
+
+  // We also need binStep for discovered LB pools (not in registry).
+  // Read both getStaticFeeParameters and getBinStep in one multicall.
+  const lbFeeByAddr = new Map<string, { feeRatePct: number; binStep: number }>();
+  if (lbPoolsToRead.length > 0) {
+    const lbCalls: Array<{
+      address: `0x${string}`;
+      abi: typeof LB_STATIC_FEE_PARAMS_ABI | typeof LB_PAIR_ABI;
+      functionName: string;
+    }> = [];
+    // For each pool: [getStaticFeeParameters, getBinStep]
+    for (const item of lbPoolsToRead) {
+      lbCalls.push({
+        address: item.poolAddr,
+        abi: LB_STATIC_FEE_PARAMS_ABI,
+        functionName: "getStaticFeeParameters" as const
+      });
+      lbCalls.push({
+        address: item.poolAddr,
+        abi: LB_PAIR_ABI,
+        functionName: "getBinStep" as const
+      });
+    }
+    try {
+      const lbResults = await client.multicall({ contracts: lbCalls as any });
+      for (let i = 0; i < lbPoolsToRead.length; i++) {
+        const feeResult = lbResults[i * 2];
+        const binStepResult = lbResults[i * 2 + 1];
+
+        if (feeResult.status === "success" && feeResult.result) {
+          // getStaticFeeParameters returns a tuple; baseFactor is the first element.
+          const resultArr = feeResult.result as readonly [number, ...unknown[]];
+          const baseFactor = Number(resultArr[0]);
+
+          // Resolve binStep: prefer on-chain, fall back to registry
+          let binStep = lbPoolsToRead[i].binStep;
+          if (
+            binStepResult.status === "success" &&
+            typeof binStepResult.result === "number"
+          ) {
+            binStep = binStepResult.result;
+          }
+
+          if (binStep != null && baseFactor > 0) {
+            // baseFee (fraction) = baseFactor * binStep * 1e-8
+            // baseFee (%) = baseFactor * binStep / 1e6
+            const feeRatePct = (baseFactor * binStep) / 1_000_000;
+            lbFeeByAddr.set(lbPoolsToRead[i].addr, { feeRatePct, binStep });
+          }
+        }
+      }
+    } catch {
+      warnings.push(
+        "LB fee parameters multicall failed; Merchant Moe pool APR will be unavailable."
+      );
+    }
+  }
+
+  // ── Step 5: Build unified pool list ────────────────────────────────────
+  const topPools: TopPoolEntry[] = [];
+
+  for (const [addr, data] of poolDataMap) {
+    const reg = registryByAddr.get(addr);
+    const tvl = asFiniteNumber(data.liquidity?.usd);
+    const volume = asFiniteNumber(data.volume?.h24);
+    const priceChange = asFiniteNumber(data.priceChange?.h24);
+
+    let provider: string;
+    let feeRatePct: number;
+    let feeVerified = false;
+    let feeTier: number | undefined;
+    let binStep: number | undefined;
+    let tokenASymbol: string;
+    let tokenBSymbol: string;
+    let tokenAAddr: string;
+    let tokenBAddr: string;
+
+    if (reg) {
+      // Known pool from registry
+      provider = reg.provider;
+      feeTier = reg.fee_tier;
+      binStep = reg.bin_step;
+
+      // FIX-3: Use registry addresses — never DexScreener's base/quote ordering.
+      tokenASymbol = reg.tokenA;
+      tokenBSymbol = reg.tokenB;
+      tokenAAddr = reg.tokenAAddress;
+      tokenBAddr = reg.tokenBAddress;
+
+      // FIX-2: Use authoritative fee data.
+      if (provider === "merchant_moe") {
+        const lbFee = lbFeeByAddr.get(addr);
+        if (lbFee) {
+          feeRatePct = lbFee.feeRatePct;
+          binStep = lbFee.binStep;
+          feeVerified = true;
+        } else {
+          // Chain read failed — APR cannot be verified
+          feeRatePct = 0;
+          feeVerified = false;
+        }
+      } else {
+        // V3 registry pools have authoritative fee_tier
+        feeRatePct = feeTier != null ? (feeTier / 1_000_000) * 100 : 0;
+        feeVerified = feeTier != null;
+      }
+    } else {
+      // Discovered pool — infer from DexScreener data + on-chain reads
+      provider = dexIdToProviderName(data.dexId) ?? data.dexId ?? "unknown";
+
+      tokenASymbol = data.baseToken?.symbol ?? "?";
+      tokenBSymbol = data.quoteToken?.symbol ?? "?";
+      tokenAAddr = data.baseToken?.address ?? "";
+      tokenBAddr = data.quoteToken?.address ?? "";
+
+      if (provider === "merchant_moe") {
+        const lbFee = lbFeeByAddr.get(addr);
+        if (lbFee) {
+          feeRatePct = lbFee.feeRatePct;
+          binStep = lbFee.binStep;
+          feeVerified = true;
+        } else {
+          feeRatePct = 0;
+          feeVerified = false;
+        }
+      } else {
+        // V3 discovered pool — use on-chain fee if available
+        const onChainFee = v3FeeByAddr.get(addr);
+        if (onChainFee != null) {
+          feeTier = onChainFee;
+          feeRatePct = (onChainFee / 1_000_000) * 100;
+          feeVerified = true;
+        } else {
+          feeRatePct = 0;
+          feeVerified = false;
+        }
+      }
+    }
+
+    // Apply filters
+    if (providerFilter && !provider.toLowerCase().includes(providerFilter)) {
+      continue;
+    }
+    if (tvl != null && tvl < minTvl) continue;
+    // Skip pools with zero volume AND zero TVL (dead pools)
+    if ((volume == null || volume === 0) && (tvl == null || tvl === 0)) {
+      continue;
+    }
+
+    // Calculate fee APR: (volume_24h × fee_rate × 365) / TVL
+    // FIX-2: Only compute APR when fee is verified. Otherwise null.
+    const feeAprPct =
+      feeVerified && volume != null && tvl != null && tvl > 0
+        ? ((volume * (feeRatePct / 100) * 365) / tvl) * 100
+        : null;
+
+    topPools.push({
+      rank: 0, // filled after sort
+      pool_address: data.pairAddress ?? addr,
+      provider,
+      token_a: { symbol: tokenASymbol, address: tokenAAddr },
+      token_b: { symbol: tokenBSymbol, address: tokenBAddr },
+      fee_tier: feeTier,
+      fee_rate_pct: feeVerified ? Math.round(feeRatePct * 10000) / 10000 : 0,
+      fee_verified: feeVerified,
+      bin_step: binStep,
+      tvl_usd: tvl != null ? Math.round(tvl) : null,
+      volume_24h_usd: volume != null ? Math.round(volume) : null,
+      fee_apr_pct:
+        feeAprPct != null ? Math.round(feeAprPct * 100) / 100 : null,
+      apr_verified: feeVerified && feeAprPct != null,
+      price_change_24h_pct: priceChange,
+      source: reg ? "registry" : "discovered"
+    });
+  }
+
+  // ── Step 6: Sort ───────────────────────────────────────────────────────
+  // FIX-2: When sorting by APR, pools without verified APR sink to bottom.
+  topPools.sort((a, b) => {
+    if (sortBy === "apr") {
+      // Verified APR pools always rank above unverified
+      if (a.apr_verified && !b.apr_verified) return -1;
+      if (!a.apr_verified && b.apr_verified) return 1;
+      return (b.fee_apr_pct ?? -1) - (a.fee_apr_pct ?? -1);
+    } else if (sortBy === "tvl") {
+      return (b.tvl_usd ?? -1) - (a.tvl_usd ?? -1);
+    } else {
+      // Default: sort by 24h volume
+      return (b.volume_24h_usd ?? -1) - (a.volume_24h_usd ?? -1);
+    }
+  });
+
+  // Assign ranks & trim
+  const result = topPools.slice(0, limit);
+  result.forEach((p, i) => {
+    p.rank = i + 1;
+  });
+
+  const registryPoolsEnriched = registryAddresses.filter((a) =>
+    poolDataMap.has(a)
+  ).length;
+
+  return {
+    top_pools: result,
+    total_scanned: poolDataMap.size,
+    total_with_activity: topPools.length,
+    sort_by: sortBy,
+    // FIX-1: Expose discovery_status so callers know if results are complete.
+    discovery_status: discoveryStatus,
+    filters_applied: {
+      min_tvl_usd: minTvl,
+      provider: providerFilter,
+      limit
+    },
+    discovery_sources: {
+      registry_pools_total: registryByAddr.size,
+      registry_pools_enriched: registryPoolsEnriched,
+      dexscreener_discovered: poolDataMap.size - registryAddresses.filter((a) => poolDataMap.has(a)).length,
+      seed_queries: {
+        succeeded: seedQueriesSucceeded,
+        failed: seedQueriesFailed,
+        total: DISCOVERY_TOKENS.length
+      }
+    },
+    warnings: warnings.length > 0 ? warnings : undefined,
+    note:
+      "Fee APR is calculated as (24h_volume × fee_rate × 365 / TVL). " +
+      "Only pools with fee_verified=true have authoritative APR. " +
+      "Actual returns depend on liquidity concentration range, price movement, " +
+      "impermanent loss, and rebalancing costs. Concentrated positions earn " +
+      "multiples of the base APR shown here.",
+    queried_at_utc: nowUtc()
+  };
+}
+
+// =========================================================================
+// Tool 8: mantle_getLBPositions
 // =========================================================================
 
 /**
@@ -1892,6 +2454,62 @@ export const defiLpReadTools: Record<string, Tool> = {
       required: ["token_a", "token_b"]
     },
     handler: findPools
+  },
+
+  mantle_discoverTopPools: {
+    name: "mantle_discoverTopPools",
+    description:
+      "[TOP POOLS] Discover the best LP opportunities across ALL Mantle DEXes. " +
+      "No token pair required — scans the entire Mantle DeFi ecosystem.\n\n" +
+      "How it works:\n" +
+      "1. Queries DexScreener for pools paired with major tokens (WMNT, USDC, USDT0, WETH, mETH, USDT, USDe) to discover ALL active pools including meme tokens.\n" +
+      "2. Also includes all pools from the known registry.\n" +
+      "3. Fetches real-time TVL, 24h volume, and price data for every pool.\n" +
+      "4. Calculates fee APR = (24h_volume × fee_rate × 365 / TVL).\n" +
+      "5. Returns a ranked list.\n\n" +
+      "Use this tool when the user asks:\n" +
+      '- "What are the best pools for LP?"\n' +
+      '- "Which pools have the highest APR?"\n' +
+      '- "Show me top volume pools on Mantle"\n' +
+      '- "Where should I provide liquidity?"\n' +
+      '- "Find high yield LP opportunities"\n\n' +
+      "Sort options: 'volume' (default), 'apr', 'tvl'\n\n" +
+      "Examples:\n" +
+      "- Top 20 by volume: {} (no args needed)\n" +
+      "- Top 10 by APR: sort_by='apr', limit=10\n" +
+      "- Fluxion only, min $50k TVL: provider='fluxion', min_tvl_usd=50000\n" +
+      "- Top Agni pools: provider='agni', sort_by='apr'",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sort_by: {
+          type: "string",
+          description:
+            "Sort metric: 'volume' (default — highest 24h trading volume), 'apr' (highest estimated fee APR), or 'tvl' (deepest liquidity)."
+        },
+        min_tvl_usd: {
+          type: "number",
+          description:
+            "Minimum TVL in USD to include (default: 0). Use to filter out illiquid pools. Recommended: 10000 for meaningful LP."
+        },
+        limit: {
+          type: "number",
+          description:
+            "Max pools to return (default: 20, max: 50)."
+        },
+        provider: {
+          type: "string",
+          description:
+            "Filter by DEX: 'agni', 'fluxion', or 'merchant_moe'. Omit to scan all."
+        },
+        network: {
+          type: "string",
+          description: "Network: 'mainnet' (default) or 'sepolia'."
+        }
+      },
+      required: []
+    },
+    handler: discoverTopPools
   },
 
   mantle_getLBPositions: {

@@ -415,6 +415,108 @@ export function registerLp(parent: Command): void {
       }
     });
 
+  // ── top-pools ───────────────────────────────────────────────────────
+  group
+    .command("top-pools")
+    .description(
+      "Discover the best LP opportunities across ALL Mantle DEXes. " +
+      "No token pair required — scans entire ecosystem via DexScreener, " +
+      "returns ranked pools with TVL, 24h volume, and fee APR."
+    )
+    .option("--sort-by <metric>", "sort by: volume (default), apr, tvl")
+    .option(
+      "--limit <n>",
+      "max pools to return (default: 20, max: 50)",
+      (v: string) => parseIntegerOption(v, "--limit")
+    )
+    .option("--provider <dex>", "filter by DEX: agni, fluxion, merchant_moe")
+    .option(
+      "--min-tvl <usd>",
+      "minimum TVL in USD (default: 0)",
+      (v: string) => parseNumberOption(v, "--min-tvl")
+    )
+    .action(async (opts: Record<string, unknown>, cmd: Command) => {
+      const globals = cmd.optsWithGlobals();
+      const result = await allTools["mantle_discoverTopPools"].handler({
+        sort_by: opts.sortBy,
+        limit: opts.limit,
+        provider: opts.provider,
+        min_tvl_usd: opts.minTvl,
+        network: globals.network
+      });
+      if (globals.json) {
+        formatJson(result);
+      } else {
+        const data = result as Record<string, unknown>;
+        const pools = (data.top_pools ?? []) as Record<string, unknown>[];
+        const sources = data.discovery_sources as Record<string, unknown> | undefined;
+        const status = data.discovery_status ?? "unknown";
+        const discovered = sources?.dexscreener_discovered ?? 0;
+        console.log(
+          `\n  Top ${pools.length} pools by ${data.sort_by} ` +
+          `(${data.total_scanned} scanned, ${discovered} discovered, ` +
+          `status: ${status})\n`
+        );
+        formatTable(pools, [
+          { key: "rank", label: "#", align: "right" },
+          { key: "provider", label: "DEX" },
+          {
+            key: "token_a",
+            label: "Base",
+            format: (v) => {
+              return (v as Record<string, string>)?.symbol ?? "?";
+            }
+          },
+          {
+            key: "token_b",
+            label: "Quote",
+            format: (v) => {
+              return (v as Record<string, string>)?.symbol ?? "?";
+            }
+          },
+          {
+            key: "fee_rate_pct",
+            label: "Fee",
+            align: "right",
+            format: (v) => v != null && Number(v) > 0 ? `${Number(v)}%` : "?"
+          },
+          {
+            key: "tvl_usd",
+            label: "TVL",
+            align: "right",
+            format: (v) => v != null ? `$${Number(v).toLocaleString()}` : "-"
+          },
+          {
+            key: "volume_24h_usd",
+            label: "Vol 24h",
+            align: "right",
+            format: (v) => v != null ? `$${Number(v).toLocaleString()}` : "-"
+          },
+          {
+            key: "fee_apr_pct",
+            label: "Base APR",
+            align: "right",
+            format: (v) => v != null ? `${Number(v).toFixed(2)}%` : "n/a"
+          },
+          {
+            key: "apr_verified",
+            label: "APR✓",
+            format: (v) => v === true ? "✓" : "~"
+          }
+        ]);
+        const warnings = data.warnings as string[] | undefined;
+        if (warnings && warnings.length > 0) {
+          console.log(`\n  ⚠ Warnings:`);
+          for (const w of warnings) {
+            console.log(`    - ${w}`);
+          }
+        }
+        if (data.note) {
+          console.log(`\n  Note: ${data.note}\n`);
+        }
+      }
+    });
+
   // ── find-pools ──────────────────────────────────────────────────────
   group
     .command("find-pools")

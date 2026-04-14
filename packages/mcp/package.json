@@ -1,6 +1,6 @@
 {
   "name": "@mantleio/mantle-mcp",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "license": "MIT",
   "description": "MCP server for AI-driven Mantle L2 development — chain reads, simulation, and unsigned transaction building",
   "type": "module",
@@ -38,7 +38,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@mantleio/mantle-core": "0.1.9",
+    "@mantleio/mantle-core": "0.1.10",
     "@modelcontextprotocol/sdk": "~1.27.1"
   },
   "engines": {

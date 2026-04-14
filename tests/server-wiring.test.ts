@@ -14,6 +14,7 @@ describe("server wiring", () => {
       "mantle_buildAddLiquidity",
       "mantle_buildApprove",
       "mantle_buildCollectFees",
+      "mantle_buildRawTx",
       "mantle_buildRemoveLiquidity",
       "mantle_buildSwap",
       "mantle_buildTransferNative",
@@ -21,8 +22,11 @@ describe("server wiring", () => {
       "mantle_buildUnwrapMnt",
       "mantle_buildWrapMnt",
       "mantle_checkRpcHealth",
+      "mantle_discoverTopPools",
+      "mantle_encodeCall",
       "mantle_estimateGas",
       "mantle_findPools",
+      "mantle_formatUnits",
       "mantle_getAavePositions",
       "mantle_getAllowances",
       "mantle_getBalance",
@@ -42,6 +46,7 @@ describe("server wiring", () => {
       "mantle_getTransactionReceipt",
       "mantle_getV3PoolState",
       "mantle_getV3Positions",
+      "mantle_parseUnits",
       "mantle_probeEndpoint",
       "mantle_queryIndexerSql",
       "mantle_querySubgraph",
@@ -50,6 +55,7 @@ describe("server wiring", () => {
       "mantle_suggestTickRange",
       "mantle_validateAddress"
     ]);
+
   });
 
   it("indexes tools by MCP tool name for O(1) dispatch", () => {

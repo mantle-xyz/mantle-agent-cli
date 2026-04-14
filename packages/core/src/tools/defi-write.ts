@@ -11,7 +11,9 @@ import {
   formatUnits,
   getAddress,
   isAddress,
-  parseUnits
+  parseUnits,
+  keccak256,
+  toHex
 } from "viem";
 
 import { MantleMcpError } from "../errors.js";
@@ -344,6 +346,109 @@ function getContractAddress(
   return addr;
 }
 
+// ---------------------------------------------------------------------------
+// Idempotency key — deterministic, signer-scoped hash for deduplication.
+//
+// Key = keccak256(sender + request_id + to + data + value + chainId)
+//
+// • `sender` scopes the key to a specific wallet so two different signers
+//   building the same calldata do NOT collide.
+// • `request_id` lets the caller tag each user intent so the same wallet
+//   can legitimately submit identical payloads for different user requests.
+// • When neither is supplied the key still covers the calldata, but the
+//   signer SHOULD inject its own address before deduplication.
+// ---------------------------------------------------------------------------
+
+function computeIdempotencyKey(
+  unsignedTx: { to: string; data: string; value: string; chainId: number },
+  sender: string | null,
+  requestId: string | null
+): string {
+  const parts = [
+    sender ?? "*",            // "*" = not scoped to a wallet
+    requestId ?? "*",         // "*" = not scoped to a request
+    unsignedTx.to,
+    unsignedTx.data,
+    unsignedTx.value,
+    String(unsignedTx.chainId)
+  ];
+  const payload = parts.join(":");
+  const encoded = toHex(new TextEncoder().encode(payload));
+  return keccak256(encoded);
+}
+
+/**
+ * Try to extract and normalize a valid address from an arg value.
+ * Returns checksummed lowercase-safe address or null.
+ */
+function extractNormalizedAddress(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    if (isAddress(value.trim(), { strict: false })) {
+      return getAddress(value.trim()).toLowerCase();
+    }
+  } catch {
+    // Not a valid address — skip
+  }
+  return null;
+}
+
+/**
+ * Wrap a build-tool handler to automatically append `idempotency_key`.
+ *
+ * The key is scoped to:
+ *   - `sender` (signing wallet address) — extracted from args.sender,
+ *     args.owner, args.on_behalf_of, or args.recipient; normalized to
+ *     checksummed lowercase for format-invariant deduplication.
+ *   - `request_id` — from args.request_id (caller-provided per-intent ID)
+ *   - unsigned_tx fields (to, data, value, chainId)
+ *
+ * When sender cannot be resolved, `idempotency_key` is still emitted but
+ * `idempotency_scope.sender` is set to `"unscoped"` so the executor knows
+ * it must inject its own signer address before deduplicating.
+ *
+ * Handlers that return results without `unsigned_tx` (e.g. getSwapPairs)
+ * pass through unchanged.
+ */
+function wrapBuildHandler(
+  handler: (args: Record<string, unknown>, deps?: any) => Promise<any>
+): (args: Record<string, unknown>, deps?: any) => Promise<any> {
+  return async (args, deps) => {
+    const result = await handler(args, deps);
+    if (
+      result &&
+      typeof result === "object" &&
+      result.unsigned_tx &&
+      typeof result.unsigned_tx.to === "string" &&
+      typeof result.unsigned_tx.data === "string"
+    ) {
+      // Extract sender scope from all possible arg fields, normalized.
+      // Priority: explicit sender > owner > on_behalf_of > recipient
+      const sender =
+        extractNormalizedAddress(args.sender) ??
+        extractNormalizedAddress(args.owner) ??
+        extractNormalizedAddress(args.on_behalf_of) ??
+        extractNormalizedAddress(args.recipient) ??
+        null;
+
+      const rawRequestId =
+        typeof args.request_id === "string" ? args.request_id.trim() : "";
+      const requestId = rawRequestId.length > 0 ? rawRequestId : null;
+
+      const key = computeIdempotencyKey(result.unsigned_tx, sender, requestId);
+      return {
+        ...result,
+        idempotency_key: key,
+        idempotency_scope: {
+          sender: sender ?? "unscoped",
+          request_id: requestId ?? "none"
+        }
+      };
+    }
+    return result;
+  };
+}
+
 interface UnsignedTxResult {
   intent: string;
   human_summary: string;
@@ -354,6 +459,33 @@ interface UnsignedTxResult {
     chainId: number;
     /** Suggested gas limit. Wallets should use this or estimate on their own. */
     gas?: string;
+  };
+  /**
+   * Deterministic, signer-scoped hash for deduplication.
+   *
+   * Computed as keccak256(sender + request_id + to + data + value + chainId).
+   * The sender address is normalized to checksummed lowercase before hashing,
+   * so "0xABC..." and "0xabc..." produce the same key.
+   *
+   * The external signer / executor SHOULD use this key for deduplication:
+   * if two build-tool calls from the SAME sender return the same
+   * idempotency_key, the second transaction MUST NOT be signed or broadcast.
+   *
+   * Sender is extracted from args in priority order:
+   *   sender > owner > on_behalf_of > recipient
+   * This covers all builder call patterns (transfers, Aave, LP, etc.).
+   *
+   * When `idempotency_scope.sender` is `"unscoped"`, the executor MUST
+   * inject its own signing wallet address before deduplicating — the raw
+   * key alone is not wallet-safe in that case.
+   *
+   * Added automatically by the wrapBuildHandler wrapper.
+   */
+  idempotency_key?: string;
+  /** Shows what scoped the idempotency_key (sender + request_id). */
+  idempotency_scope?: {
+    sender: string;
+    request_id: string;
   };
   warnings: string[];
   built_at_utc: string;
@@ -3104,8 +3236,11 @@ export const defiWriteTools: Record<string, Tool> = {
       "Build an unsigned transaction to transfer native MNT to a recipient address. " +
       "Handles decimal-to-wei conversion and hex encoding deterministically — " +
       "NEVER manually compute wei values or hex-encode transfer amounts.\n\n" +
+      "DEDUPLICATION: Response includes idempotency_key. Pass sender (signing wallet address) " +
+      "to scope the key per-wallet. Pass request_id (unique per user intent) to prevent " +
+      "false deduplication across separate user requests.\n\n" +
       "Examples:\n" +
-      "- Send 15 MNT: amount='15', to='0x...'\n" +
+      "- Send 15 MNT: amount='15', to='0x...', sender='0x<signing_wallet>'\n" +
       "- Send 0.5 MNT: amount='0.5', to='0x...'",
     inputSchema: {
       type: "object",
@@ -3118,6 +3253,14 @@ export const defiWriteTools: Record<string, Tool> = {
           type: "string",
           description: "Decimal amount of MNT to transfer (e.g. '15', '0.5')."
         },
+        sender: {
+          type: "string",
+          description: "Signing wallet address. Scopes idempotency_key to this wallet so different wallets can independently execute identical transfers."
+        },
+        request_id: {
+          type: "string",
+          description: "Unique ID for this user intent (e.g. UUID). Prevents false deduplication when the same wallet legitimately builds identical transactions for different requests."
+        },
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
@@ -3125,7 +3268,7 @@ export const defiWriteTools: Record<string, Tool> = {
       },
       required: ["to", "amount"]
     },
-    handler: buildTransferNative
+    handler: wrapBuildHandler(buildTransferNative)
   },
 
   mantle_buildTransferToken: {
@@ -3135,8 +3278,10 @@ export const defiWriteTools: Record<string, Tool> = {
       "Resolves token symbol to address and decimals from the registry, then encodes " +
       "the transfer calldata deterministically — NEVER manually compute raw amounts " +
       "or hex-encode transfer values.\n\n" +
+      "DEDUPLICATION: Response includes idempotency_key. Pass sender (signing wallet address) " +
+      "to scope the key per-wallet.\n\n" +
       "Examples:\n" +
-      "- Send 100 USDC: token='USDC', amount='100', to='0x...'\n" +
+      "- Send 100 USDC: token='USDC', amount='100', to='0x...', sender='0x<signing_wallet>'\n" +
       "- Send 50 WMNT: token='WMNT', amount='50', to='0x...'",
     inputSchema: {
       type: "object",
@@ -3153,6 +3298,14 @@ export const defiWriteTools: Record<string, Tool> = {
           type: "string",
           description: "Decimal amount of tokens to transfer (e.g. '100', '0.5')."
         },
+        sender: {
+          type: "string",
+          description: "Signing wallet address. Scopes idempotency_key to this wallet."
+        },
+        request_id: {
+          type: "string",
+          description: "Unique ID for this user intent. Prevents false deduplication across separate requests."
+        },
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
@@ -3160,7 +3313,7 @@ export const defiWriteTools: Record<string, Tool> = {
       },
       required: ["token", "to", "amount"]
     },
-    handler: buildTransferToken
+    handler: wrapBuildHandler(buildTransferToken)
   },
 
   mantle_buildApprove: {
@@ -3196,13 +3349,13 @@ export const defiWriteTools: Record<string, Tool> = {
       },
       required: ["token", "spender", "amount"]
     },
-    handler: buildApprove
+    handler: wrapBuildHandler(buildApprove)
   },
 
   mantle_buildWrapMnt: {
     name: "mantle_buildWrapMnt",
     description:
-      "Build an unsigned transaction to wrap MNT into WMNT. Returns calldata with value field set to the wrap amount.\n\nExamples:\n- Wrap 10 MNT: amount='10'\n- Wrap 0.5 MNT: amount='0.5'",
+      "Build an unsigned transaction to wrap MNT into WMNT. Returns calldata with value field set to the wrap amount.\n\nExamples:\n- Wrap 10 MNT: amount='10', sender='0x<signing_wallet>'\n- Wrap 0.5 MNT: amount='0.5'",
     inputSchema: {
       type: "object",
       properties: {
@@ -3210,26 +3363,13 @@ export const defiWriteTools: Record<string, Tool> = {
           type: "string",
           description: "Decimal amount of MNT to wrap (e.g. '10')."
         },
-        network: {
+        sender: {
           type: "string",
-          description: "Network: 'mainnet' (default) or 'sepolia'."
-        }
-      },
-      required: ["amount"]
-    },
-    handler: buildWrapMnt
-  },
-
-  mantle_buildUnwrapMnt: {
-    name: "mantle_buildUnwrapMnt",
-    description:
-      "Build an unsigned transaction to unwrap WMNT back to MNT.\n\nExamples:\n- Unwrap 10 WMNT: amount='10'\n- Unwrap 0.5 WMNT: amount='0.5'",
-    inputSchema: {
-      type: "object",
-      properties: {
-        amount: {
+          description: "Signing wallet address. Scopes idempotency_key to this wallet."
+        },
+        request_id: {
           type: "string",
-          description: "Decimal amount of WMNT to unwrap (e.g. '10')."
+          description: "Unique ID for this user intent."
         },
         network: {
           type: "string",
@@ -3238,7 +3378,36 @@ export const defiWriteTools: Record<string, Tool> = {
       },
       required: ["amount"]
     },
-    handler: buildUnwrapMnt
+    handler: wrapBuildHandler(buildWrapMnt)
+  },
+
+  mantle_buildUnwrapMnt: {
+    name: "mantle_buildUnwrapMnt",
+    description:
+      "Build an unsigned transaction to unwrap WMNT back to MNT.\n\nExamples:\n- Unwrap 10 WMNT: amount='10', sender='0x<signing_wallet>'\n- Unwrap 0.5 WMNT: amount='0.5'",
+    inputSchema: {
+      type: "object",
+      properties: {
+        amount: {
+          type: "string",
+          description: "Decimal amount of WMNT to unwrap (e.g. '10')."
+        },
+        sender: {
+          type: "string",
+          description: "Signing wallet address. Scopes idempotency_key to this wallet."
+        },
+        request_id: {
+          type: "string",
+          description: "Unique ID for this user intent."
+        },
+        network: {
+          type: "string",
+          description: "Network: 'mainnet' (default) or 'sepolia'."
+        }
+      },
+      required: ["amount"]
+    },
+    handler: wrapBuildHandler(buildUnwrapMnt)
   },
 
   mantle_buildSwap: {
@@ -3313,7 +3482,7 @@ export const defiWriteTools: Record<string, Tool> = {
       },
       required: ["provider", "token_in", "token_out", "amount_in", "recipient"]
     },
-    handler: buildSwap
+    handler: wrapBuildHandler(buildSwap)
   },
 
   mantle_buildAddLiquidity: {
@@ -3405,7 +3574,7 @@ export const defiWriteTools: Record<string, Tool> = {
         "recipient"
       ]
     },
-    handler: buildAddLiquidity
+    handler: wrapBuildHandler(buildAddLiquidity)
   },
 
   mantle_buildRemoveLiquidity: {
@@ -3465,7 +3634,7 @@ export const defiWriteTools: Record<string, Tool> = {
       },
       required: ["provider", "recipient"]
     },
-    handler: buildRemoveLiquidity
+    handler: wrapBuildHandler(buildRemoveLiquidity)
   },
 
   mantle_buildAaveSupply: {
@@ -3498,7 +3667,7 @@ export const defiWriteTools: Record<string, Tool> = {
       },
       required: ["asset", "amount", "on_behalf_of"]
     },
-    handler: buildAaveSupply
+    handler: wrapBuildHandler(buildAaveSupply)
   },
 
   mantle_buildAaveBorrow: {
@@ -3536,7 +3705,7 @@ export const defiWriteTools: Record<string, Tool> = {
       },
       required: ["asset", "amount", "on_behalf_of"]
     },
-    handler: buildAaveBorrow
+    handler: wrapBuildHandler(buildAaveBorrow)
   },
 
   mantle_buildAaveRepay: {
@@ -3569,7 +3738,7 @@ export const defiWriteTools: Record<string, Tool> = {
       },
       required: ["asset", "amount", "on_behalf_of"]
     },
-    handler: buildAaveRepay
+    handler: wrapBuildHandler(buildAaveRepay)
   },
 
   mantle_buildAaveWithdraw: {
@@ -3598,7 +3767,7 @@ export const defiWriteTools: Record<string, Tool> = {
       },
       required: ["asset", "amount", "to"]
     },
-    handler: buildAaveWithdraw
+    handler: wrapBuildHandler(buildAaveWithdraw)
   },
 
   mantle_buildAaveSetCollateral: {
@@ -3645,7 +3814,7 @@ export const defiWriteTools: Record<string, Tool> = {
       },
       required: ["asset"]
     },
-    handler: buildAaveSetCollateral
+    handler: wrapBuildHandler(buildAaveSetCollateral)
   },
 
   mantle_getSwapPairs: {
@@ -3692,6 +3861,6 @@ export const defiWriteTools: Record<string, Tool> = {
       },
       required: ["provider", "token_id", "recipient"]
     },
-    handler: buildCollectFees
+    handler: wrapBuildHandler(buildCollectFees)
   }
 };
