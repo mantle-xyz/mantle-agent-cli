@@ -291,7 +291,15 @@ async function buildRawTxHandler(
     typeof args.request_id === "string" ? args.request_id.trim() : "";
   const requestId = rawRequestId.length > 0 ? rawRequestId : null;
 
-  const unsignedTx = { to, data, value: valueHex, chainId };
+  const unsignedTx: { to: string; data: string; value: string; chainId: number; nonce?: number } =
+    { to, data, value: valueHex, chainId };
+  const nonceArg =
+    typeof args.nonce === "number" && Number.isInteger(args.nonce) && args.nonce >= 0
+      ? args.nonce
+      : null;
+  if (nonceArg != null) {
+    unsignedTx.nonce = nonceArg;
+  }
   const idempotencyParts = [
     sender ?? "*",
     requestId ?? "*",
@@ -485,6 +493,10 @@ export const utilsTools: Record<string, Tool> = {
         request_id: {
           type: "string",
           description: "Unique ID for this user intent."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["to", "data"]

@@ -107,6 +107,31 @@ function requireAddress(input: unknown, fieldName: string): string {
   return getAddress(input);
 }
 
+export async function getNonce(
+  args: Record<string, unknown>,
+  deps?: Partial<AccountDeps>
+): Promise<any> {
+  const resolvedDeps = withDeps(deps);
+  const { network } = normalizeNetwork(args);
+  const address = requireAddress(args.address, "address");
+  const client = resolvedDeps.getClient(network);
+
+  const [pendingNonce, blockNumber] = await Promise.all([
+    client.getTransactionCount
+      ? client.getTransactionCount({ address: address as `0x${string}`, blockTag: "pending" })
+      : Promise.reject(new Error("getTransactionCount not implemented on client")),
+    client.getBlockNumber()
+  ]);
+
+  return {
+    address,
+    network,
+    nonce: pendingNonce,
+    block_number: Number(blockNumber),
+    collected_at_utc: resolvedDeps.now()
+  };
+}
+
 export async function getBalance(
   args: Record<string, unknown>,
   deps?: Partial<AccountDeps>
@@ -294,6 +319,20 @@ export async function getAllowances(
 }
 
 export const accountTools: Record<string, Tool> = {
+  getNonce: {
+    name: "mantle_getNonce",
+    description:
+      "Get the current pending nonce (transaction count) for an address. Use this when the user reports nonce errors during signing/broadcast, then pass the returned nonce value (including 0 for fresh accounts) to build tools via the nonce parameter. Use the returned nonce immediately — it reflects the mempool state at collected_at_utc and may become stale within seconds if other transactions are pending.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        address: { type: "string", description: "Wallet address to query nonce for." },
+        network: { type: "string", enum: ["mainnet", "sepolia"], description: "Network." }
+      },
+      required: ["address"]
+    },
+    handler: getNonce
+  },
   getBalance: {
     name: "mantle_getBalance",
     description:

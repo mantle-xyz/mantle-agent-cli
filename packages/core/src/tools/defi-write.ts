@@ -430,6 +430,15 @@ function wrapBuildHandler(
         typeof args.request_id === "string" ? args.request_id.trim() : "";
       const requestId = rawRequestId.length > 0 ? rawRequestId : null;
 
+      // Inject optional nonce override from caller args (must be a non-negative integer)
+      const nonceArg =
+        typeof args.nonce === "number" && Number.isInteger(args.nonce) && args.nonce >= 0
+          ? args.nonce
+          : null;
+      if (nonceArg != null) {
+        result.unsigned_tx.nonce = nonceArg;
+      }
+
       const key = computeIdempotencyKey(result.unsigned_tx, sender, requestId);
       return {
         ...result,
@@ -454,6 +463,9 @@ interface UnsignedTxResult {
     chainId: number;
     /** Suggested gas limit. Wallets should use this or estimate on their own. */
     gas?: string;
+    /** Optional nonce override. Only present when caller explicitly provides a nonce
+     *  (e.g. after querying mantle_getNonce to work around signer nonce issues). */
+    nonce?: number;
   };
   /**
    * Deterministic, signer-scoped hash for deduplication.
@@ -3138,6 +3150,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["to", "amount"]
@@ -3183,6 +3199,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["token", "to", "amount"]
@@ -3219,6 +3239,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["token", "spender", "amount"]
@@ -3248,6 +3272,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["amount"]
@@ -3277,6 +3305,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["amount"]
@@ -3352,6 +3384,10 @@ export const defiWriteTools: Record<string, Tool> = {
         owner: {
           type: "string",
           description: "Wallet address that owns the input tokens (the signer). Used for optional allowance pre-check — emits a warning if allowance is insufficient."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["provider", "token_in", "token_out", "amount_in", "recipient"]
@@ -3439,6 +3475,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: [
@@ -3504,6 +3544,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["provider", "recipient"]
@@ -3537,6 +3581,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["asset", "amount", "on_behalf_of"]
@@ -3575,6 +3623,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["asset", "amount", "on_behalf_of"]
@@ -3608,6 +3660,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["asset", "amount", "on_behalf_of"]
@@ -3637,6 +3693,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["asset", "amount", "to"]
@@ -3684,6 +3744,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["asset"]
@@ -3731,6 +3795,10 @@ export const defiWriteTools: Record<string, Tool> = {
         network: {
           type: "string",
           description: "Network: 'mainnet' (default) or 'sepolia'."
+        },
+        nonce: {
+          type: "number",
+          description: "Optional nonce override. Query mantle_getNonce first to get the correct value. Only use when the signer has nonce issues."
         }
       },
       required: ["provider", "token_id", "recipient"]
