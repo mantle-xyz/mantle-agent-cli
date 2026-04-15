@@ -6,9 +6,13 @@
  * guessing or asking the user.
  *
  * Sources:
+ * - DexScreener: https://dexscreener.com/mantle (pools with liq > $1000)
  * - GeckoTerminal: https://www.geckoterminal.com/mantle/
  * - Merchant Moe docs: https://docs.merchantmoe.com/resources/contracts
  * - Agni Finance: https://agni.finance
+ *
+ * Pool parameters (feeTier, binStep) verified on-chain via Mantle RPC.
+ * Full DexScreener snapshot: see dexscreener-pools.json in the same directory.
  */
 
 import type { Network } from "../types.js";
@@ -68,7 +72,13 @@ export const TOKENS = {
   USDT: "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE",
   BSB: "0xe5c330ADdf7aa9C7838dA836436142c56a15aa95",
   ELSA: "0x29cC30f9D113B356Ce408667aa6433589CeCBDcA",
-  VOOI: "0xd81a4aDea9932a6BDba0bDBc8C5Fd4C78e5A09f1"
+  VOOI: "0xd81a4aDea9932a6BDba0bDBc8C5Fd4C78e5A09f1",
+  // Added from DexScreener 2026-04-15
+  AUSD: "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a",
+  COOK: "0xEF991B15c54Ed3D4d84493F1B45a9F337c78322e",
+  PUFF: "0x26a6b0dcdCfb981362aFA56D581e4A7dBA3Be140",
+  JOE: "0x371c7ec6D8039ff7933a2AA28EB827Ffe1F52f07",
+  axlUSDC: "0xEB466342C4d449BC9f53A865D5Cb90586f405215"
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -190,6 +200,102 @@ const MOE_PAIRS: MoePair[] = [
     tokenAAddress: TOKENS.cmETH, tokenBAddress: TOKENS.USDT,
     pool: "0x91c5aee46eba5f6b38b962ee248b9cef04b05244",
     binStep: 10, version: 2
+  },
+
+  // ---- AUSD pairs (LB V2.2 pools, from DexScreener 2026-04-15) ----
+  {
+    provider: "merchant_moe",
+    tokenA: "AUSD", tokenB: "USDe",
+    tokenAAddress: TOKENS.AUSD, tokenBAddress: TOKENS.USDe,
+    pool: "0x5A59359a1ad9b0A59aa70145dFeCeb6d9Ee07253",
+    binStep: 1, version: 2, routerVersion: 3
+  },
+  {
+    provider: "merchant_moe",
+    tokenA: "AUSD", tokenB: "USDT",
+    tokenAAddress: TOKENS.AUSD, tokenBAddress: TOKENS.USDT,
+    pool: "0x1f20f0895DF44D33Cf8144a52de811871a21ef4b",
+    binStep: 1, version: 2, routerVersion: 3
+  },
+  {
+    provider: "merchant_moe",
+    tokenA: "WMNT", tokenB: "AUSD",
+    tokenAAddress: TOKENS.WMNT, tokenBAddress: TOKENS.AUSD,
+    pool: "0xaa5b9A9b7804d7748b385F758Efb266AA780a982",
+    binStep: 10, version: 2, routerVersion: 3
+  },
+
+  // ---- FBTC pairs (LB V2.2 pools, from DexScreener 2026-04-15) ----
+  {
+    provider: "merchant_moe",
+    tokenA: "FBTC", tokenB: "cmETH",
+    tokenAAddress: TOKENS.FBTC, tokenBAddress: TOKENS.cmETH,
+    pool: "0x2612E3280ca8836F58173bF7EcC35e258Dc1b54B",
+    binStep: 25, version: 2, routerVersion: 3
+  },
+
+  // ---- sUSDe pairs (LB V2.2 pool, from DexScreener 2026-04-15) ----
+  {
+    provider: "merchant_moe",
+    tokenA: "sUSDe", tokenB: "USDe",
+    tokenAAddress: TOKENS.sUSDe, tokenBAddress: TOKENS.USDe,
+    pool: "0xE50019C79Cbd7C49cfFA7C3f8080EA238DE75962",
+    binStep: 5, version: 2, routerVersion: 3
+  },
+
+  // ---- cmETH extra pairs (LB V2.2 pools, from DexScreener 2026-04-15) ----
+  {
+    provider: "merchant_moe",
+    tokenA: "WETH", tokenB: "cmETH",
+    tokenAAddress: TOKENS.WETH, tokenBAddress: TOKENS.cmETH,
+    pool: "0x0e70C050D81E8d328694c9557AF989610a411c45",
+    binStep: 5, version: 2, routerVersion: 3
+  },
+  {
+    provider: "merchant_moe",
+    tokenA: "cmETH", tokenB: "USDe",
+    tokenAAddress: TOKENS.cmETH, tokenBAddress: TOKENS.USDe,
+    pool: "0x38E2a053E67697e411344B184B3aBAe4fab42cC2",
+    binStep: 20, version: 2, routerVersion: 3
+  },
+  {
+    provider: "merchant_moe",
+    tokenA: "WMNT", tokenB: "cmETH",
+    tokenAAddress: TOKENS.WMNT, tokenBAddress: TOKENS.cmETH,
+    pool: "0x1f9d94c13C9d9a3b67d62C15df9d135321C741ea",
+    binStep: 10, version: 2, routerVersion: 3
+  },
+
+  // ---- Additional WMNT pairs (LB V2.2 pools, from DexScreener 2026-04-15) ----
+  {
+    provider: "merchant_moe",
+    tokenA: "WMNT", tokenB: "USDT",
+    tokenAAddress: TOKENS.WMNT, tokenBAddress: TOKENS.USDT,
+    pool: "0x365722f12ceb2063286A268B03c654Df81B7C00F",
+    binStep: 25, version: 2, routerVersion: 3
+  },
+  {
+    provider: "merchant_moe",
+    tokenA: "WETH", tokenB: "WMNT",
+    tokenAAddress: TOKENS.WETH, tokenBAddress: TOKENS.WMNT,
+    pool: "0x1606C79bE3EBD70D8d40bAc6287e23005CfBefA2",
+    binStep: 10, version: 2, routerVersion: 3
+  },
+  {
+    provider: "merchant_moe",
+    tokenA: "WETH", tokenB: "cmETH",
+    tokenAAddress: TOKENS.WETH, tokenBAddress: TOKENS.cmETH,
+    pool: "0xF0601AA87a7341a38034B49f9517dd3adC2DdeC4",
+    binStep: 1, version: 2, routerVersion: 3
+  },
+
+  // ---- PUFF pair (LB V2.2, from DexScreener 2026-04-15) ----
+  {
+    provider: "merchant_moe",
+    tokenA: "PUFF", tokenB: "mETH",
+    tokenAAddress: TOKENS.PUFF, tokenBAddress: TOKENS.mETH,
+    pool: "0x74E0655bC7141314e5bC5b93bc9A83ca80F4fd8a",
+    binStep: 100, version: 2, routerVersion: 3
   }
 ];
 
@@ -259,6 +365,92 @@ const AGNI_PAIRS: V3Pair[] = [
     tokenAAddress: TOKENS.USDe, tokenBAddress: TOKENS.USDC,
     pool: "0xBCf99c834E65E8a58090E20eDc058279317865BD",
     feeTier: 100 // 0.01%
+  },
+
+  // ---- New Agni pools (from DexScreener 2026-04-15) ----
+  {
+    provider: "agni",
+    tokenA: "FBTC", tokenB: "cmETH",
+    tokenAAddress: TOKENS.FBTC, tokenBAddress: TOKENS.cmETH,
+    pool: "0xeA2a184da675f9eFF9E5af3cF269Fb4946082241",
+    feeTier: 2500 // 0.25%
+  },
+  {
+    provider: "agni",
+    tokenA: "USDT0", tokenB: "USDT",
+    tokenAAddress: TOKENS.USDT0, tokenBAddress: TOKENS.USDT,
+    pool: "0x0d290C8E7F3fFA5267de4b1f9f6F6D8d578624Ac",
+    feeTier: 100 // 0.01%
+  },
+  {
+    provider: "agni",
+    tokenA: "USDe", tokenB: "USDT",
+    tokenAAddress: TOKENS.USDe, tokenBAddress: TOKENS.USDT,
+    pool: "0x36A7aff497eeF6a9cd7d0e7bc243793fcb3E57E2",
+    feeTier: 100 // 0.01%
+  },
+  {
+    provider: "agni",
+    tokenA: "WETH", tokenB: "cmETH",
+    tokenAAddress: TOKENS.WETH, tokenBAddress: TOKENS.cmETH,
+    pool: "0x0D9E39D357337eDde4A9BC12178da40256e2f533",
+    feeTier: 500 // 0.05%
+  },
+  {
+    provider: "agni",
+    tokenA: "cmETH", tokenB: "USDe",
+    tokenAAddress: TOKENS.cmETH, tokenBAddress: TOKENS.USDe,
+    pool: "0x95D39c45668D59141dc5bCC940e6C191f1ebB98c",
+    feeTier: 2500 // 0.25%
+  },
+  {
+    provider: "agni",
+    tokenA: "cmETH", tokenB: "mETH",
+    tokenAAddress: TOKENS.cmETH, tokenBAddress: TOKENS.mETH,
+    pool: "0xf9B5F2bABdD388737BE702Dd732FB6B6Bfe9dc20",
+    feeTier: 100 // 0.01%
+  },
+  {
+    provider: "agni",
+    tokenA: "COOK", tokenB: "USDe",
+    tokenAAddress: TOKENS.COOK, tokenBAddress: TOKENS.USDe,
+    pool: "0x5E91619CF346BF692287AF1E18219CcfFb641c6B",
+    feeTier: 2500 // 0.25%
+  },
+  {
+    provider: "agni",
+    tokenA: "axlUSDC", tokenB: "USDT",
+    tokenAAddress: TOKENS.axlUSDC, tokenBAddress: TOKENS.USDT,
+    pool: "0x628F6a4b26bde4694AE6208E52D0AA2aFF8Ed6C1",
+    feeTier: 100 // 0.01%
+  },
+  {
+    provider: "agni",
+    tokenA: "mETH", tokenB: "USDT",
+    tokenAAddress: TOKENS.mETH, tokenBAddress: TOKENS.USDT,
+    pool: "0x551D49F0a9C3D5293293E12f36b210e0124dD4E7",
+    feeTier: 2500 // 0.25%
+  },
+  {
+    provider: "agni",
+    tokenA: "FBTC", tokenB: "mETH",
+    tokenAAddress: TOKENS.FBTC, tokenBAddress: TOKENS.mETH,
+    pool: "0x651C9D1F9da787688225f49d63ad1623ba89A8D5",
+    feeTier: 2500 // 0.25%
+  },
+  {
+    provider: "agni",
+    tokenA: "WMNT", tokenB: "USDC",
+    tokenAAddress: TOKENS.WMNT, tokenBAddress: TOKENS.USDC,
+    pool: "0x1858d52cf57c07A018171D7a1E68DC081F17144f",
+    feeTier: 500 // 0.05%
+  },
+  {
+    provider: "agni",
+    tokenA: "WETH", tokenB: "WMNT",
+    tokenAAddress: TOKENS.WETH, tokenBAddress: TOKENS.WMNT,
+    pool: "0x9Ec313FF05946b6f3860A99B470625aBba7Eb0a2",
+    feeTier: 2500 // 0.25%
   }
 ];
 
@@ -363,6 +555,15 @@ const FLUXION_PAIRS: V3Pair[] = [
     tokenA: "USDT0", tokenB: "VOOI",
     tokenAAddress: TOKENS.USDT0, tokenBAddress: TOKENS.VOOI,
     pool: "0x2305ad92740d186bf3834d4cca2eee1b3d5fa3fe",
+    feeTier: 3000
+  },
+
+  // ---- New Fluxion pool (from DexScreener 2026-04-15) ----
+  {
+    provider: "fluxion",
+    tokenA: "ELSA", tokenB: "WMNT",
+    tokenAAddress: TOKENS.ELSA, tokenBAddress: TOKENS.WMNT,
+    pool: "0x87eA83f40fCcdb5e4a10FcC66a7a73B3F12bbf35",
     feeTier: 3000
   },
 

@@ -201,7 +201,10 @@ export function registerLp(parent: Command): void {
   group
     .command("positions")
     .description("[DISABLED] List V3 LP positions for an owner across Agni and Fluxion")
-    .requiredOption("--owner <address>", "wallet address to query")
+    // NOTE: --owner is intentionally `.option` (not `.requiredOption`) so users
+    // who run `mantle-cli lp positions` without flags still see the friendly
+    // disabled message below instead of a "missing required option" error.
+    .option("--owner <address>", "wallet address to query (ignored — command is disabled)")
     .option("--provider <provider>", "filter by provider: agni or fluxion")
     .option("--include-empty", "include zero-liquidity positions", false)
     .action(async () => {
@@ -388,106 +391,19 @@ export function registerLp(parent: Command): void {
       }
     });
 
-  // ── top-pools ───────────────────────────────────────────────────────
+  // ── top-pools (temporarily disabled — DexScreener rate-limit issues) ──
   group
     .command("top-pools")
-    .description(
-      "Discover the best LP opportunities across ALL Mantle DEXes. " +
-      "No token pair required — scans entire ecosystem via DexScreener, " +
-      "returns ranked pools with TVL, 24h volume, and fee APR."
-    )
-    .option("--sort-by <metric>", "sort by: volume (default), apr, tvl")
-    .option(
-      "--limit <n>",
-      "max pools to return (default: 20, max: 50)",
-      (v: string) => parseIntegerOption(v, "--limit")
-    )
-    .option("--provider <dex>", "filter by DEX: agni, fluxion, merchant_moe")
-    .option(
-      "--min-tvl <usd>",
-      "minimum TVL in USD (default: 0)",
-      (v: string) => parseNumberOption(v, "--min-tvl")
-    )
-    .action(async (opts: Record<string, unknown>, cmd: Command) => {
-      const globals = cmd.optsWithGlobals();
-      const result = await allTools["mantle_discoverTopPools"].handler({
-        sort_by: opts.sortBy,
-        limit: opts.limit,
-        provider: opts.provider,
-        min_tvl_usd: opts.minTvl,
-        network: globals.network
-      });
-      if (globals.json) {
-        formatJson(result);
-      } else {
-        const data = result as Record<string, unknown>;
-        const pools = (data.top_pools ?? []) as Record<string, unknown>[];
-        const sources = data.discovery_sources as Record<string, unknown> | undefined;
-        const status = data.discovery_status ?? "unknown";
-        const discovered = sources?.dexscreener_discovered ?? 0;
-        console.log(
-          `\n  Top ${pools.length} pools by ${data.sort_by} ` +
-          `(${data.total_scanned} scanned, ${discovered} discovered, ` +
-          `status: ${status})\n`
-        );
-        formatTable(pools, [
-          { key: "rank", label: "#", align: "right" },
-          { key: "provider", label: "DEX" },
-          {
-            key: "token_a",
-            label: "Base",
-            format: (v) => {
-              return (v as Record<string, string>)?.symbol ?? "?";
-            }
-          },
-          {
-            key: "token_b",
-            label: "Quote",
-            format: (v) => {
-              return (v as Record<string, string>)?.symbol ?? "?";
-            }
-          },
-          {
-            key: "fee_rate_pct",
-            label: "Fee",
-            align: "right",
-            format: (v) => v != null && Number(v) > 0 ? `${Number(v)}%` : "?"
-          },
-          {
-            key: "tvl_usd",
-            label: "TVL",
-            align: "right",
-            format: (v) => v != null ? `$${Number(v).toLocaleString()}` : "-"
-          },
-          {
-            key: "volume_24h_usd",
-            label: "Vol 24h",
-            align: "right",
-            format: (v) => v != null ? `$${Number(v).toLocaleString()}` : "-"
-          },
-          {
-            key: "fee_apr_pct",
-            label: "Base APR",
-            align: "right",
-            format: (v) => v != null ? `${Number(v).toFixed(2)}%` : "n/a"
-          },
-          {
-            key: "apr_verified",
-            label: "APR✓",
-            format: (v) => v === true ? "✓" : "~"
-          }
-        ]);
-        const warnings = data.warnings as string[] | undefined;
-        if (warnings && warnings.length > 0) {
-          console.log(`\n  ⚠ Warnings:`);
-          for (const w of warnings) {
-            console.log(`    - ${w}`);
-          }
-        }
-        if (data.note) {
-          console.log(`\n  Note: ${data.note}\n`);
-        }
-      }
+    .description("[DISABLED] Discover top LP opportunities (temporarily disabled)")
+    .action(async () => {
+      console.error(
+        "\n  This command is temporarily disabled.\n\n" +
+        "  DexScreener API rate-limiting causes frequent query failures.\n" +
+        "  A fix with retry/backoff logic is in progress.\n\n" +
+        "  Workaround: use 'lp find-pools' for specific token pairs,\n" +
+        "  or 'lp analyze' for deep pool analysis.\n"
+      );
+      process.exitCode = 1;
     });
 
   // ── find-pools ──────────────────────────────────────────────────────
@@ -546,6 +462,17 @@ export function registerLp(parent: Command): void {
               if (n === 0n) return "-";
               if (n > 10n ** 18n) return (Number(n / (10n ** 12n)) / 1e6).toFixed(1) + "T";
               return n.toString();
+            }
+          },
+          {
+            // Discriminant so "Liquidity" values are not visually comparable across
+            // providers (V3 virtual-L vs LB mixed-decimal reserves are not the same unit).
+            key: "liquidity_unit",
+            label: "Unit",
+            format: (v) => {
+              if (v === "v3_virtual_liquidity") return "v3-L";
+              if (v === "lb_active_bin_native_mixed") return "lb-bin-mixed";
+              return v ? String(v) : "-";
             }
           }
         ]);

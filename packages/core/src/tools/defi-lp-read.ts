@@ -511,12 +511,22 @@ interface PositionResult {
  * commonly caps at ~100k blocks). We use a chunked approach, scanning
  * backward from the chain tip to find events efficiently.
  */
+/**
+ * NOTE: This scanner is currently unreachable because `mantle_getV3Positions`
+ * is disabled (see capability-catalog + defi-lp-read.ts registrations). It is
+ * retained as a reference implementation for the future re-enable; see the
+ * disabled-tool entry in capability-catalog.ts for the blocker (Agni's
+ * NonfungiblePositionManager lacks ERC721Enumerable and the event-scan fallback
+ * below is unreliable on Mantle public RPC). TODO(lp-v3-positions-reenable):
+ * gate behind a feature flag and add coverage before flipping the tool on.
+ */
 async function discoverTokenIdsByEvents(
   client: ReturnType<typeof getPublicClient>,
   positionManager: `0x${string}`,
   owner: `0x${string}`,
   maxPositions: number
-): Promise<bigint[]> {
+): Promise<{ ownedIds: bigint[]; warnings: string[] }> {
+  const warnings: string[] = [];
   const latestBlock = await client.getBlockNumber();
 
   // Scan backward in chunks. Most users' positions are recent, so
@@ -524,12 +534,17 @@ async function discoverTokenIdsByEvents(
   const CHUNK_SIZE = 100_000n;
   // Cap total scan depth to ~20M blocks (well beyond Mantle's full history)
   const MIN_BLOCK = latestBlock > 20_000_000n ? latestBlock - 20_000_000n : 0n;
+  const MAX_RETRY_DEPTH = 3;
 
   const candidateIds = new Set<bigint>();
 
-  let toBlock = latestBlock;
-  while (toBlock > MIN_BLOCK) {
-    const fromBlock = toBlock > CHUNK_SIZE ? toBlock - CHUNK_SIZE + 1n : MIN_BLOCK;
+  // Recursive best-effort window scan: halves on RPC rejection up to
+  // MAX_RETRY_DEPTH levels (covers public RPCs that cap at 10k–50k blocks).
+  async function scanRange(
+    fromBlock: bigint,
+    toBlock: bigint,
+    depth: number
+  ): Promise<void> {
     try {
       const logs = await client.getContractEvents({
         address: positionManager,
@@ -544,41 +559,43 @@ async function discoverTokenIdsByEvents(
         if (tokenId != null) candidateIds.add(tokenId);
       }
     } catch {
-      // If a chunk fails (e.g., range still too large), halve the chunk
-      // and retry once with smaller windows within this range.
-      const halfChunk = (toBlock - fromBlock) / 2n;
-      if (halfChunk > 0n) {
-        for (const [subFrom, subTo] of [
-          [fromBlock, fromBlock + halfChunk],
-          [fromBlock + halfChunk + 1n, toBlock]
-        ] as const) {
-          try {
-            const logs = await client.getContractEvents({
-              address: positionManager,
-              abi: V3_POSITION_MANAGER_ABI,
-              eventName: "Transfer",
-              args: { to: owner },
-              fromBlock: subFrom,
-              toBlock: subTo
-            });
-            for (const log of logs) {
-              const tokenId = (log.args as { tokenId?: bigint }).tokenId;
-              if (tokenId != null) candidateIds.add(tokenId);
-            }
-          } catch {
-            // Skip this sub-chunk on failure — best effort
-          }
-        }
+      const span = toBlock - fromBlock;
+      if (depth >= MAX_RETRY_DEPTH || span < 2n) {
+        warnings.push(
+          `Event-log scan failed for blocks ${fromBlock}-${toBlock} after ${depth} retry level(s); some historical positions may be missing.`
+        );
+        return;
       }
+      const mid = fromBlock + span / 2n;
+      await scanRange(fromBlock, mid, depth + 1);
+      await scanRange(mid + 1n, toBlock, depth + 1);
     }
-    toBlock = fromBlock > 0n ? fromBlock - 1n : 0n;
-    if (fromBlock === MIN_BLOCK) break;
   }
 
-  if (candidateIds.size === 0) return [];
+  let toBlock = latestBlock;
+  while (toBlock > MIN_BLOCK) {
+    // Clamp the final chunk's fromBlock to MIN_BLOCK instead of overscanning
+    // up to ~100k blocks below it. This was the F-4 bug (review 2026-04-16).
+    const fromBlock = toBlock > MIN_BLOCK + CHUNK_SIZE ? toBlock - CHUNK_SIZE + 1n : MIN_BLOCK;
+    await scanRange(fromBlock, toBlock, 0);
+    if (fromBlock <= MIN_BLOCK) break;
+    toBlock = fromBlock - 1n;
+  }
 
-  // Batch-verify current ownership — tokens may have been transferred away
-  const idList = Array.from(candidateIds).slice(0, maxPositions * 2);
+  if (candidateIds.size === 0) return { ownedIds: [], warnings };
+
+  // Batch-verify current ownership — tokens may have been transferred away.
+  // Candidates are truncated to maxPositions*2 to bound multicall size; this
+  // can silently drop currently-owned positions when a wallet has many more
+  // historical transfers than live positions. Emit a warning if we truncate.
+  const allCandidates = Array.from(candidateIds);
+  const sliceLimit = maxPositions * 2;
+  const idList = allCandidates.slice(0, sliceLimit);
+  if (allCandidates.length > sliceLimit) {
+    warnings.push(
+      `Candidate token IDs truncated from ${allCandidates.length} to ${sliceLimit} (maxPositions*2). Old positions may be missing; raise maxPositions to widen the window.`
+    );
+  }
   const ownerOfCalls = idList.map((id) => ({
     address: positionManager,
     abi: V3_POSITION_MANAGER_ABI,
@@ -601,7 +618,7 @@ async function discoverTokenIdsByEvents(
     }
   }
 
-  return ownedIds;
+  return { ownedIds, warnings };
 }
 
 async function readPositionsForProvider(
@@ -654,7 +671,12 @@ async function readPositionsForProvider(
   // Fallback: if Enumerable is unsupported, discover token IDs from
   // Transfer event logs and verify current ownership via ownerOf.
   if (tokenIds.length === 0 && count > 0) {
-    tokenIds = await discoverTokenIdsByEvents(client, positionManager, owner, cappedCount);
+    const scan = await discoverTokenIdsByEvents(client, positionManager, owner, cappedCount);
+    tokenIds = scan.ownedIds;
+    // NOTE: scan.warnings are currently dropped because this tool is disabled.
+    // When re-enabling mantle_getV3Positions, plumb warnings up to the caller
+    // (readPositionsForProvider → its consumer) so truncation and partial
+    // log-scan failures surface to agents.
   }
 
   if (tokenIds.length === 0) return [];
@@ -1365,6 +1387,16 @@ interface FoundPool {
   fee_tier?: number;
   bin_step?: number;
   liquidity_raw: string;
+  /**
+   * Units for `liquidity_raw`. Callers MUST NOT compare `liquidity_raw` across
+   * different `liquidity_unit` values — V3 virtual liquidity and LB raw
+   * reserves are not dimensionally compatible.
+   *   - "v3_virtual_liquidity": Uniswap V3 `pool.liquidity()` (unitless, ~sqrt(xy))
+   *   - "lb_active_bin_native_mixed": Merchant Moe active-bin (reserveX + reserveY)
+   *     summed in native token decimals — mixed across tokens (e.g. USDC@6 + WMNT@18).
+   *     Useful only as "is there any liquidity" / sort-within-provider.
+   */
+  liquidity_unit?: "v3_virtual_liquidity" | "lb_active_bin_native_mixed";
   has_liquidity: boolean;
 }
 
@@ -1435,6 +1467,7 @@ async function findPools(
           pool_address: liquidityCalls[i].poolAddress,
           fee_tier: liquidityCalls[i].fee,
           liquidity_raw: liquidity.toString(),
+          liquidity_unit: "v3_virtual_liquidity",
           has_liquidity: liquidity > 0n
         });
       }
@@ -1539,6 +1572,7 @@ async function findPools(
         pool_address: lbPairs[i].pairAddress,
         bin_step: lbPairs[i].binStep,
         liquidity_raw: liquidity.toString(),
+        liquidity_unit: "lb_active_bin_native_mixed",
         has_liquidity: liquidity > 0n
       });
     }
@@ -2606,61 +2640,8 @@ export const defiLpReadTools: Record<string, Tool> = {
     handler: findPools
   },
 
-  mantle_discoverTopPools: {
-    name: "mantle_discoverTopPools",
-    description:
-      "[TOP POOLS] Discover the best LP opportunities across ALL Mantle DEXes. " +
-      "No token pair required — scans the entire Mantle DeFi ecosystem.\n\n" +
-      "How it works:\n" +
-      "1. Queries DexScreener for pools paired with major tokens (WMNT, USDC, USDT0, WETH, mETH, USDT, USDe) to discover ALL active pools including meme tokens.\n" +
-      "2. Also includes all pools from the known registry.\n" +
-      "3. Fetches real-time TVL, 24h volume, and price data for every pool.\n" +
-      "4. Calculates fee APR = (24h_volume × fee_rate × 365 / TVL).\n" +
-      "5. Returns a ranked list.\n\n" +
-      "Use this tool when the user asks:\n" +
-      '- "What are the best pools for LP?"\n' +
-      '- "Which pools have the highest APR?"\n' +
-      '- "Show me top volume pools on Mantle"\n' +
-      '- "Where should I provide liquidity?"\n' +
-      '- "Find high yield LP opportunities"\n\n' +
-      "Sort options: 'volume' (default), 'apr', 'tvl'\n\n" +
-      "Examples:\n" +
-      "- Top 20 by volume: {} (no args needed)\n" +
-      "- Top 10 by APR: sort_by='apr', limit=10\n" +
-      "- Fluxion only, min $50k TVL: provider='fluxion', min_tvl_usd=50000\n" +
-      "- Top Agni pools: provider='agni', sort_by='apr'",
-    inputSchema: {
-      type: "object",
-      properties: {
-        sort_by: {
-          type: "string",
-          description:
-            "Sort metric: 'volume' (default — highest 24h trading volume), 'apr' (highest estimated fee APR), or 'tvl' (deepest liquidity)."
-        },
-        min_tvl_usd: {
-          type: "number",
-          description:
-            "Minimum TVL in USD to include (default: 0). Use to filter out illiquid pools. Recommended: 10000 for meaningful LP."
-        },
-        limit: {
-          type: "number",
-          description:
-            "Max pools to return (default: 20, max: 50)."
-        },
-        provider: {
-          type: "string",
-          description:
-            "Filter by DEX: 'agni', 'fluxion', or 'merchant_moe'. Omit to scan all."
-        },
-        network: {
-          type: "string",
-          description: "Network: 'mainnet' (default) or 'sepolia'."
-        }
-      },
-      required: []
-    },
-    handler: discoverTopPools
-  },
+  // mantle_discoverTopPools — temporarily disabled (DexScreener rate-limit issues)
+  // Re-enable once rate-limit / retry logic is hardened.
 
   mantle_getLBPositions: {
     name: "mantle_getLBPositions",

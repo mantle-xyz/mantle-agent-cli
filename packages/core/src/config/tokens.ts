@@ -173,6 +173,12 @@ export const MANTLE_TOKENS: Record<Network, Record<string, TokenEntry>> = {
       decimals: 18,
       name: "VOOI",
       symbol: "VOOI"
+    },
+    SCOR: {
+      address: "0x8DDB986b11c039a6CC1dbcabd62baE911b348F33",
+      decimals: 18,
+      name: "SCOR",
+      symbol: "SCOR"
     }
   },
   sepolia: {
@@ -184,4 +190,51 @@ export const MANTLE_TOKENS: Record<Network, Record<string, TokenEntry>> = {
       symbol: "WMNT"
     }
   }
+};
+
+/**
+ * Default token whitelist used by portfolio / balance scans when the caller
+ * does not explicitly enumerate tokens. Covers the most-held ERC-20s on
+ * Mantle so `mantle-cli account token-balances <address>` returns a useful
+ * answer out-of-the-box.
+ *
+ * Notes:
+ *  - MNT (the native gas token) is NOT listed here. Query it separately via
+ *    `mantle_getBalance` — token balance tools only handle ERC-20s.
+ *  - USDT0 (LayerZero OFT Tether, 0x779D…3736) is included because it is a
+ *    distinct asset from bridged USDT on Mantle and is otherwise easy to
+ *    miss in portfolio scans.
+ */
+export const PORTFOLIO_DEFAULT_TOKENS: Record<Network, readonly string[]> = {
+  mainnet: [
+    // Majors & stables
+    "WMNT",
+    "WETH",
+    "USDC",
+    "USDT",
+    "USDT0",
+    // LSTs / restaking
+    "cmETH",
+    // Ecosystem governance / DEX
+    "MOE",
+    // Yield / RWA stables
+    "USDe",
+    // BTC-backed
+    "FBTC",
+    // xStocks (RWA equities)
+    "wMETAx",
+    "wTSLAx",
+    "wGOOGLx",
+    "wNVDAx",
+    "wQQQx",
+    "wAAPLx",
+    "wSPYx",
+    "wMSTRx",
+    // Fluxion ecosystem
+    "BSB",
+    "ELSA",
+    "VOOI",
+    "SCOR"
+  ],
+  sepolia: ["WMNT"]
 };

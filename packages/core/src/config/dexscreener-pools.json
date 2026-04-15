@@ -1,0 +1,880 @@
+{
+  "_meta": {
+    "source": "https://dexscreener.com/mantle",
+    "fetched_at": "2026-04-15",
+    "filter": "liquidity_usd >= 1000",
+    "total_pools": 59,
+    "notes": "Only merchant_moe, agni, fluxion pools. Pool parameters (feeTier, binStep) verified on-chain via Mantle RPC."
+  },
+  "pools": [
+    {
+      "provider": "agni",
+      "pool": "0xeA2a184da675f9eFF9E5af3cF269Fb4946082241",
+      "baseToken": {
+        "symbol": "FBTC",
+        "address": "0xC96dE26018A54D51c097160568752c4E3BD6C364"
+      },
+      "quoteToken": {
+        "symbol": "cmETH",
+        "address": "0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA"
+      },
+      "feeTier": 2500,
+      "liquidityUsd": 8181039
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x5A59359a1ad9b0A59aa70145dFeCeb6d9Ee07253",
+      "baseToken": {
+        "symbol": "AUSD",
+        "address": "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a"
+      },
+      "quoteToken": {
+        "symbol": "USDe",
+        "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+      },
+      "binStep": 1,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 6327670
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x2612E3280ca8836F58173bF7EcC35e258Dc1b54B",
+      "baseToken": {
+        "symbol": "FBTC",
+        "address": "0xC96dE26018A54D51c097160568752c4E3BD6C364"
+      },
+      "quoteToken": {
+        "symbol": "cmETH",
+        "address": "0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA"
+      },
+      "binStep": 25,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 5950757
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x7ccD8a769d466340Fff36c6e10fFA8cf9077D988",
+      "baseToken": {
+        "symbol": "USDe",
+        "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "binStep": 1,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 5921860
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0xfc9D88653E2988B0e6525f1F521c974a25c88566",
+      "baseToken": {
+        "symbol": "USDT0",
+        "address": "0x779Ded0c9e1022225f8E0630b35a9b54bE713736"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "binStep": 1,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 4511158
+    },
+    {
+      "provider": "agni",
+      "pool": "0x0d290C8E7F3fFA5267de4b1f9f6F6D8d578624Ac",
+      "baseToken": {
+        "symbol": "USDT0",
+        "address": "0x779Ded0c9e1022225f8E0630b35a9b54bE713736"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "feeTier": 100,
+      "liquidityUsd": 4421013
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0xE50019C79Cbd7C49cfFA7C3f8080EA238DE75962",
+      "baseToken": {
+        "symbol": "sUSDe",
+        "address": "0x211Cc4DD073734dA055fbF44a2b4667d5E5fE5d2"
+      },
+      "quoteToken": {
+        "symbol": "USDe",
+        "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+      },
+      "binStep": 5,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 4212681
+    },
+    {
+      "provider": "agni",
+      "pool": "0xeAfc4D6d4c3391Cd4Fc10c85D2f5f972d58C0dD5",
+      "baseToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "quoteToken": {
+        "symbol": "USDe",
+        "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+      },
+      "feeTier": 2500,
+      "liquidityUsd": 3627664
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x5d54d430D1FD9425976147318E6080479bffC16D",
+      "baseToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "quoteToken": {
+        "symbol": "USDe",
+        "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+      },
+      "binStep": 25,
+      "version": 2,
+      "liquidityUsd": 3614164
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x7e78B65d0525339dF5F4aA22b82d9e97584Da8FC",
+      "baseToken": {
+        "symbol": "USDe",
+        "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "binStep": 1,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 2144184
+    },
+    {
+      "provider": "agni",
+      "pool": "0xBCf99c834E65E8a58090E20eDc058279317865BD",
+      "baseToken": {
+        "symbol": "USDe",
+        "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "feeTier": 100,
+      "liquidityUsd": 1708382
+    },
+    {
+      "provider": "agni",
+      "pool": "0x36A7aff497eeF6a9cd7d0e7bc243793fcb3E57E2",
+      "baseToken": {
+        "symbol": "USDe",
+        "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "feeTier": 100,
+      "liquidityUsd": 1527396
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x3d887CE4988fb46AEC6E0027171f65DB3526E5f1",
+      "baseToken": {
+        "symbol": "cmETH",
+        "address": "0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA"
+      },
+      "quoteToken": {
+        "symbol": "mETH",
+        "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+      },
+      "binStep": 1,
+      "version": 2,
+      "liquidityUsd": 1473371
+    },
+    {
+      "provider": "agni",
+      "pool": "0x0D9E39D357337eDde4A9BC12178da40256e2f533",
+      "baseToken": {
+        "symbol": "WETH",
+        "address": "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111"
+      },
+      "quoteToken": {
+        "symbol": "cmETH",
+        "address": "0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA"
+      },
+      "feeTier": 500,
+      "liquidityUsd": 1272366
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x0e70C050D81E8d328694c9557AF989610a411c45",
+      "baseToken": {
+        "symbol": "WETH",
+        "address": "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111"
+      },
+      "quoteToken": {
+        "symbol": "cmETH",
+        "address": "0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA"
+      },
+      "binStep": 5,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 1265661
+    },
+    {
+      "provider": "agni",
+      "pool": "0x95D39c45668D59141dc5bCC940e6C191f1ebB98c",
+      "baseToken": {
+        "symbol": "cmETH",
+        "address": "0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA"
+      },
+      "quoteToken": {
+        "symbol": "USDe",
+        "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+      },
+      "feeTier": 2500,
+      "liquidityUsd": 1223628
+    },
+    {
+      "provider": "agni",
+      "pool": "0xf9B5F2bABdD388737BE702Dd732FB6B6Bfe9dc20",
+      "baseToken": {
+        "symbol": "cmETH",
+        "address": "0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA"
+      },
+      "quoteToken": {
+        "symbol": "mETH",
+        "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+      },
+      "feeTier": 100,
+      "liquidityUsd": 1219862
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x365722f12ceb2063286A268B03c654Df81B7C00F",
+      "baseToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "binStep": 25,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 1207785
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x38E2a053E67697e411344B184B3aBAe4fab42cC2",
+      "baseToken": {
+        "symbol": "cmETH",
+        "address": "0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA"
+      },
+      "quoteToken": {
+        "symbol": "USDe",
+        "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+      },
+      "binStep": 20,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 1081256
+    },
+    {
+      "provider": "agni",
+      "pool": "0x5E91619CF346BF692287AF1E18219CcfFb641c6B",
+      "baseToken": {
+        "symbol": "COOK",
+        "address": "0xEF991B15c54Ed3D4d84493F1B45a9F337c78322e"
+      },
+      "quoteToken": {
+        "symbol": "USDe",
+        "address": "0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"
+      },
+      "feeTier": 2500,
+      "liquidityUsd": 530737
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x3b6c029E6409f2868769871F9Ed6825b15BDca15",
+      "baseToken": {
+        "symbol": "mETH",
+        "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+      },
+      "quoteToken": {
+        "symbol": "WETH",
+        "address": "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111"
+      },
+      "binStep": 2,
+      "version": 2,
+      "liquidityUsd": 323438
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0xF0601AA87a7341a38034B49f9517dd3adC2DdeC4",
+      "baseToken": {
+        "symbol": "WETH",
+        "address": "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111"
+      },
+      "quoteToken": {
+        "symbol": "cmETH",
+        "address": "0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA"
+      },
+      "binStep": 1,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 292228
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x763868612858358f62b05691dB82Ad35a9b3E110",
+      "baseToken": {
+        "symbol": "MOE",
+        "address": "0x4515A45337F461A11Ff0FE8aBF3c606AE5dC00c9"
+      },
+      "quoteToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "poolType": "v1",
+      "liquidityUsd": 269075
+    },
+    {
+      "provider": "fluxion",
+      "pool": "0x4E23BB828E51Cbc03C81D76c844228cc75F6A287",
+      "baseToken": {
+        "symbol": "wHOODx",
+        "address": "0x953707d7a1cb30cc5c636bda8eaebe410341eb14"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "feeTier": 3000,
+      "liquidityUsd": 109332
+    },
+    {
+      "provider": "fluxion",
+      "pool": "0x782bd3895a6Ac561d0DF11B02DD6f9E023F3a497",
+      "baseToken": {
+        "symbol": "wMETAx",
+        "address": "0x4e41a262caa93c6575d336e0a4eb850679da5322e14ce06"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "feeTier": 3000,
+      "liquidityUsd": 109243,
+      "_note": "wMETAx address: 0x4e41a262caa93c6575d336e0a4eb850679da5322e14ce06 — from DexScreener; see XSTOCKS in dex-pairs.ts for canonical"
+    },
+    {
+      "provider": "fluxion",
+      "pool": "0x66960Ed892Daf022c5f282c5316C38cb6f0c1333",
+      "baseToken": {
+        "symbol": "wGOOGLx",
+        "address": "0x1630f08370917e79df0b7572395a5e907508bbbc"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "feeTier": 3000,
+      "liquidityUsd": 107740
+    },
+    {
+      "provider": "fluxion",
+      "pool": "0xa875aC23d106394d1bAAAE5bc42b951268Bc04E2",
+      "baseToken": {
+        "symbol": "wNVDAx",
+        "address": "0x93e62845c1dd5822ebc807ab71a5fb750decd15a"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "feeTier": 3000,
+      "liquidityUsd": 106082
+    },
+    {
+      "provider": "fluxion",
+      "pool": "0x43cF441F5949d52fAa105060239543492193C87e",
+      "baseToken": {
+        "symbol": "wCRCLx",
+        "address": "0xa90872aca656ebe47bdebf3b19ec9dd9c5adc7f8"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "feeTier": 3000,
+      "liquidityUsd": 103947
+    },
+    {
+      "provider": "fluxion",
+      "pool": "0x373F7a2B95F28F38500eb70652E12038CCA3BaB8",
+      "baseToken": {
+        "symbol": "wSPYx",
+        "address": "0xc88fcd8b874fdb3256e8b55b3decb8c24eab4c02"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "feeTier": 3000,
+      "liquidityUsd": 103680
+    },
+    {
+      "provider": "fluxion",
+      "pool": "0x505258001e834251634029742fC73b5CAB4fd67d",
+      "baseToken": {
+        "symbol": "wQQQx",
+        "address": "0xdbd9232fee15351068fe02f0683146e16d9f2cea"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "feeTier": 3000,
+      "liquidityUsd": 103293
+    },
+    {
+      "provider": "fluxion",
+      "pool": "0x5E7935d70b5d14b6Cf36fbde59944533FAb96B3C",
+      "baseToken": {
+        "symbol": "wTSLAx",
+        "address": "0x43680abf18cf54898be84c6ef78237cfbd441883"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "feeTier": 3000,
+      "liquidityUsd": 102324
+    },
+    {
+      "provider": "fluxion",
+      "pool": "0x2cc6A607F3445d826B9E29f507B3A2E3B9dae106",
+      "baseToken": {
+        "symbol": "wAAPLx",
+        "address": "0x5aa7649fdbda47de64a07ac81d64b682af9c0724"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "feeTier": 3000,
+      "liquidityUsd": 102108
+    },
+    {
+      "provider": "fluxion",
+      "pool": "0x0e1F84a9e388071e20df101B36c14C817Bf81953",
+      "baseToken": {
+        "symbol": "wMSTRx",
+        "address": "0x266e5923f6118f8b340ca5a23ae7f71897361476"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "feeTier": 3000,
+      "liquidityUsd": 101182
+    },
+    {
+      "provider": "agni",
+      "pool": "0x628F6a4b26bde4694AE6208E52D0AA2aFF8Ed6C1",
+      "baseToken": {
+        "symbol": "axlUSDC",
+        "address": "0xEB466342C4d449BC9f53A865D5Cb90586f405215"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "feeTier": 100,
+      "liquidityUsd": 53160
+    },
+    {
+      "provider": "fluxion",
+      "pool": "0x87eA83f40fCcdb5e4a10FcC66a7a73B3F12bbf35",
+      "baseToken": {
+        "symbol": "ELSA",
+        "address": "0x29cC30f9D113B356Ce408667aa6433589CeCBDcA"
+      },
+      "quoteToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "feeTier": 3000,
+      "liquidityUsd": 50084
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x1606C79bE3EBD70D8d40bAc6287e23005CfBefA2",
+      "baseToken": {
+        "symbol": "WETH",
+        "address": "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111"
+      },
+      "quoteToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "binStep": 10,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 45806
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x48C1A89af1102Cad358549e9Bb16aE5f96CddFEc",
+      "baseToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "binStep": 1,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 38820
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x74E0655bC7141314e5bC5b93bc9A83ca80F4fd8a",
+      "baseToken": {
+        "symbol": "PUFF",
+        "address": "0x26a6b0dcdCfb981362aFA56D581e4A7dBA3Be140"
+      },
+      "quoteToken": {
+        "symbol": "mETH",
+        "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+      },
+      "binStep": 100,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 35247
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x3f0047606dCad6177C13742F1854Fc8c999CD2b6",
+      "baseToken": {
+        "symbol": "mETH",
+        "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "binStep": 10,
+      "version": 2,
+      "liquidityUsd": 31845
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0xa15C851Afc33aaB6E478d538a4A8C66cacC19686",
+      "baseToken": {
+        "symbol": "WETH",
+        "address": "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "binStep": 10,
+      "version": 2,
+      "liquidityUsd": 21744
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0xf6C9020c9E915808481757779EDB53DACEaE2415",
+      "baseToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "binStep": 15,
+      "version": 2,
+      "liquidityUsd": 18860
+    },
+    {
+      "provider": "agni",
+      "pool": "0xD08C50F7E69e9aeb2867DefF4A8053d9A855e26A",
+      "baseToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "feeTier": 500,
+      "liquidityUsd": 14523
+    },
+    {
+      "provider": "agni",
+      "pool": "0x551D49F0a9C3D5293293E12f36b210e0124dD4E7",
+      "baseToken": {
+        "symbol": "mETH",
+        "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "feeTier": 2500,
+      "liquidityUsd": 8598
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0xEFC38C1B0d60725B824EBeE8D431aBFBF12BC953",
+      "baseToken": {
+        "symbol": "JOE",
+        "address": "0x371c7ec6D8039ff7933a2AA28EB827Ffe1F52f07"
+      },
+      "quoteToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "poolType": "v1",
+      "liquidityUsd": 8404
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x03BeafC0d25BB553fCa274301832419C05269987",
+      "baseToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "quoteToken": {
+        "symbol": "USDT0",
+        "address": "0x779Ded0c9e1022225f8E0630b35a9b54bE713736"
+      },
+      "binStep": 100,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 7510
+    },
+    {
+      "provider": "agni",
+      "pool": "0x651C9D1F9da787688225f49d63ad1623ba89A8D5",
+      "baseToken": {
+        "symbol": "FBTC",
+        "address": "0xC96dE26018A54D51c097160568752c4E3BD6C364"
+      },
+      "quoteToken": {
+        "symbol": "mETH",
+        "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+      },
+      "feeTier": 2500,
+      "liquidityUsd": 6104
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x1f20f0895DF44D33Cf8144a52de811871a21ef4b",
+      "baseToken": {
+        "symbol": "AUSD",
+        "address": "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "binStep": 1,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 4956
+    },
+    {
+      "provider": "agni",
+      "pool": "0x4f9E3683A523b66Da89d82BbA0a9CAA1C3243dF4",
+      "baseToken": {
+        "symbol": "WETH",
+        "address": "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111"
+      },
+      "quoteToken": {
+        "symbol": "mETH",
+        "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+      },
+      "feeTier": 500,
+      "liquidityUsd": 4546
+    },
+    {
+      "provider": "agni",
+      "pool": "0x1858d52cf57c07A018171D7a1E68DC081F17144f",
+      "baseToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "feeTier": 500,
+      "liquidityUsd": 3825
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x1f9d94c13C9d9a3b67d62C15df9d135321C741ea",
+      "baseToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "quoteToken": {
+        "symbol": "cmETH",
+        "address": "0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA"
+      },
+      "binStep": 10,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 2471
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x5c819961990c9F4f9fBfd4101f1D4e565B8AA0a6",
+      "baseToken": {
+        "symbol": "mETH",
+        "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "poolType": "v1",
+      "liquidityUsd": 2298
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0xaa5b9A9b7804d7748b385F758Efb266AA780a982",
+      "baseToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "quoteToken": {
+        "symbol": "AUSD",
+        "address": "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a"
+      },
+      "binStep": 10,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 2281
+    },
+    {
+      "provider": "fluxion",
+      "pool": "0x373C05FBe686fa1f3AbF5e37Ac74C4fac73D2E95",
+      "baseToken": {
+        "symbol": "USDT0",
+        "address": "0x779Ded0c9e1022225f8E0630b35a9b54bE713736"
+      },
+      "quoteToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "feeTier": 3000,
+      "liquidityUsd": 1894
+    },
+    {
+      "provider": "agni",
+      "pool": "0x94d692aFff21E045691971A20DF4A9adb482DDF6",
+      "baseToken": {
+        "symbol": "WETH",
+        "address": "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111"
+      },
+      "quoteToken": {
+        "symbol": "mETH",
+        "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+      },
+      "feeTier": 100,
+      "liquidityUsd": 1788
+    },
+    {
+      "provider": "agni",
+      "pool": "0x3812a474E1b7610D05A947Bb0940210a2d0f6823",
+      "baseToken": {
+        "symbol": "mETH",
+        "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+      },
+      "quoteToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "feeTier": 10000,
+      "liquidityUsd": 1396
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0x368B148052A1A775Dbe70e56d04474e54c694CAC",
+      "baseToken": {
+        "symbol": "USDT0",
+        "address": "0x779Ded0c9e1022225f8E0630b35a9b54bE713736"
+      },
+      "quoteToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "binStep": 1,
+      "version": 2,
+      "routerVersion": 3,
+      "liquidityUsd": 1308
+    },
+    {
+      "provider": "agni",
+      "pool": "0x6488f911c6Cd86c289aa319C5A826Dcf8F1cA065",
+      "baseToken": {
+        "symbol": "USDC",
+        "address": "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9"
+      },
+      "quoteToken": {
+        "symbol": "USDT",
+        "address": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+      },
+      "feeTier": 100,
+      "liquidityUsd": 1285
+    },
+    {
+      "provider": "merchant_moe",
+      "pool": "0xa375ea3e1f92d62e3A71B668bAb09f7155267fa3",
+      "baseToken": {
+        "symbol": "mETH",
+        "address": "0xcDA86A272531e8640cD7F1a92c01839911B90bb0"
+      },
+      "quoteToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "poolType": "v1",
+      "liquidityUsd": 1036
+    },
+    {
+      "provider": "agni",
+      "pool": "0x9Ec313FF05946b6f3860A99B470625aBba7Eb0a2",
+      "baseToken": {
+        "symbol": "WETH",
+        "address": "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111"
+      },
+      "quoteToken": {
+        "symbol": "WMNT",
+        "address": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8"
+      },
+      "feeTier": 2500,
+      "liquidityUsd": 1017
+    }
+  ]
+}

@@ -54,6 +54,10 @@ export function registerSwap(parent: Command): void {
       "Bin step from prior quote's resolved_pool_params (for cross-validation)",
       (v: string) => parseIntegerOption(v, "--quote-bin-step")
     )
+    .option(
+      "--owner <address>",
+      "wallet address that owns token_in — enables blocking INSUFFICIENT_ALLOWANCE check (prevents STF reverts)"
+    )
     .action(async (opts: Record<string, unknown>, cmd: Command) => {
       const globals = cmd.optsWithGlobals();
       const result = await allTools["mantle_buildSwap"].handler({
@@ -69,6 +73,7 @@ export function registerSwap(parent: Command): void {
         quote_provider: opts.quoteProvider,
         quote_fee_tier: opts.quoteFeeTier,
         quote_bin_step: opts.quoteBinStep,
+        owner: opts.owner,
         network: globals.network
       });
       if (globals.json) {

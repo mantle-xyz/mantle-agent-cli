@@ -23,6 +23,7 @@ import {
 import { MantleMcpError } from "../errors.js";
 import type { Tool } from "../types.js";
 import { CHAIN_CONFIGS } from "../config/chains.js";
+import { isWhitelistedContract, whitelistLabel } from "../config/protocols.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -42,6 +43,82 @@ function requireString(input: unknown, fieldName: string): string {
 
 function nowUtc(): string {
   return new Date().toISOString();
+}
+
+// ---------------------------------------------------------------------------
+// Guard: reject ERC-20 transfer / transferFrom targeting protocol contracts
+// ---------------------------------------------------------------------------
+
+const TRANSFER_SELECTOR = "0xa9059cbb";       // transfer(address,uint256)
+const TRANSFER_FROM_SELECTOR = "0x23b872dd";   // transferFrom(address,address,uint256)
+const SAFE_TRANSFER_SELECTOR = "0x42842e0e";   // safeTransferFrom(address,address,uint256)
+
+/**
+ * Inspect calldata for ERC-20 transfer / transferFrom / safeTransferFrom
+ * whose recipient is a whitelisted protocol contract. Such transfers bypass
+ * protocol accounting (no aToken minted, no swap executed, no LP registered)
+ * and permanently lock funds.
+ *
+ * Throws MantleMcpError if the pattern is detected.
+ *
+ * @param calldata  0x-prefixed hex calldata
+ * @param toAddress Optional: the `to` field of the tx (the ERC-20 token
+ *                  contract). Not used for the guard itself but included in
+ *                  the error for diagnostics.
+ */
+function rejectTransferToProtocol(calldata: string, toAddress?: string): void {
+  if (!calldata || calldata.length < 10) return;
+
+  const selector = calldata.slice(0, 10).toLowerCase();
+
+  let recipientHex: string | null = null;
+
+  if (selector === TRANSFER_SELECTOR && calldata.length >= 74) {
+    // transfer(address to, uint256 amount) — recipient is first arg (bytes 10..74)
+    recipientHex = "0x" + calldata.slice(34, 74);
+  } else if (
+    (selector === TRANSFER_FROM_SELECTOR || selector === SAFE_TRANSFER_SELECTOR) &&
+    calldata.length >= 138
+  ) {
+    // transferFrom(address from, address to, uint256 amount) — recipient is second arg (bytes 74..138)
+    recipientHex = "0x" + calldata.slice(98, 138);
+  } else {
+    return; // Not a transfer-family selector
+  }
+
+  // Normalize: the ABI-encoded address is left-padded with zeros to 32 bytes.
+  // Extract the last 40 hex chars as the actual address.
+  if (recipientHex.length > 42) {
+    recipientHex = "0x" + recipientHex.slice(-40);
+  }
+
+  // Check against the whitelist
+  if (isWhitelistedContract(recipientHex, "mainnet")) {
+    const label = whitelistLabel(recipientHex, "mainnet") ?? "protocol contract";
+    const selectorName =
+      selector === TRANSFER_SELECTOR ? "transfer(address,uint256)" :
+      selector === TRANSFER_FROM_SELECTOR ? "transferFrom(address,address,uint256)" :
+      "safeTransferFrom(address,address,uint256)";
+
+    throw new MantleMcpError(
+      "BLOCKED_TRANSFER_TO_PROTOCOL",
+      `BLOCKED: ERC-20 ${selectorName} targeting ${label} (${recipientHex}). ` +
+      `Protocol contracts only accept tokens through their designated functions ` +
+      `(Pool.supply(), router.swap(), positionManager.mint(), etc.). ` +
+      `A plain transfer permanently locks funds with no recovery path.`,
+      `Use the dedicated CLI command instead: ` +
+      `Aave → 'mantle-cli aave supply/repay', ` +
+      `Swap → 'mantle-cli swap build-swap', ` +
+      `LP → 'mantle-cli lp add'. ` +
+      `Do NOT use encodeCall/buildRawTx to construct transfers to protocol contracts.`,
+      {
+        blocked_selector: selectorName,
+        recipient: recipientHex,
+        recipient_label: label,
+        ...(toAddress ? { token_contract: toAddress } : {})
+      }
+    );
+  }
 }
 
 // =========================================================================
@@ -170,6 +247,9 @@ async function encodeCallHandler(
       args: functionArgs
     });
 
+    // SAFETY GUARD: reject transfer/transferFrom targeting protocol contracts
+    rejectTransferToProtocol(data, toAddress ?? undefined);
+
     const result: Record<string, unknown> = {
       function_name: functionName,
       args: functionArgs,
@@ -238,6 +318,9 @@ async function buildRawTxHandler(
       { field: "data" }
     );
   }
+
+  // SAFETY GUARD: reject transfer/transferFrom targeting protocol contracts
+  rejectTransferToProtocol(data, to);
 
   // Value: accept decimal MNT (e.g. "0.5") or hex (e.g. "0x...")
   let valueHex = "0x0";
@@ -396,15 +479,17 @@ export const utilsTools: Record<string, Tool> = {
     description:
       "ABI-encode a smart contract function call. Returns encoded calldata (hex). " +
       "Use this ONLY when no dedicated CLI command exists for the operation. " +
-      "For standard operations (transfers, swaps, LP, Aave), ALWAYS use the dedicated " +
+      "For standard operations (swaps, LP, Aave), ALWAYS use the dedicated " +
       "CLI commands instead.\n\n" +
+      "⛔ SAFETY: This tool BLOCKS ERC-20 transfer()/transferFrom() calls whose recipient is a " +
+      "whitelisted protocol contract (Aave Pool, DEX routers, position managers). Sending tokens " +
+      "directly to these contracts locks funds permanently. Use the dedicated CLI verb instead " +
+      "(aave supply, swap build-swap, lp add).\n\n" +
       "Accepts ABI as either:\n" +
-      "- JSON array: '[{\"type\":\"function\",\"name\":\"transfer\",...}]'\n" +
-      '- Human-readable: \'function transfer(address to, uint256 amount) returns (bool)\'\n\n' +
+      "- JSON array: '[{\"type\":\"function\",\"name\":\"approve\",...}]'\n" +
+      '- Human-readable: \'function approve(address spender, uint256 amount) returns (bool)\'\n\n' +
       "If 'to' address is also provided, returns a ready-to-use unsigned_tx object.\n\n" +
       "Examples:\n" +
-      "- ERC-20 transfer: abi='function transfer(address to, uint256 amount) returns (bool)', " +
-      "function_name='transfer', args=['<recipient_address>', '1000000']\n" +
       "- Custom contract: abi='function claim(uint256 id)', function_name='claim', " +
       "args=[42], to='<contract_address>'",
     inputSchema: {
@@ -450,6 +535,10 @@ export const utilsTools: Record<string, Tool> = {
     description:
       "Build an unsigned_tx from raw calldata. Use this as the FINAL STEP when constructing " +
       "transactions for protocols not covered by dedicated CLI commands.\n\n" +
+      "⛔ SAFETY: This tool BLOCKS ERC-20 transfer()/transferFrom() calls whose recipient is a " +
+      "whitelisted protocol contract (Aave Pool, DEX routers, position managers). Sending tokens " +
+      "directly to these contracts locks funds permanently. Use the dedicated CLI verb instead " +
+      "(aave supply, swap build-swap, lp add).\n\n" +
       "Typical workflow for unsupported operations:\n" +
       "1. mantle-cli utils parse-units — convert decimal amounts to raw integers\n" +
       "2. mantle-cli utils encode-call — ABI-encode the function call → get hex calldata\n" +
@@ -458,8 +547,7 @@ export const utilsTools: Record<string, Tool> = {
       "to hex wei, and returns a properly formatted unsigned_tx with warning labels.\n\n" +
       "Examples:\n" +
       "- Call a contract: to='<contract>', data='<hex_from_encode_call>'\n" +
-      "- Call with MNT: to='<contract>', data='<hex>', value='0.5' (decimal MNT)\n" +
-      "- Plain MNT transfer: to='<recipient>', data='0x', value='1.5'",
+      "- Call with MNT: to='<contract>', data='<hex>', value='0.5' (decimal MNT)",
     inputSchema: {
       type: "object",
       properties: {

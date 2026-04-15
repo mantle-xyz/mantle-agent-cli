@@ -1,5 +1,7 @@
 import type { Command } from "commander";
 import { allTools } from "@mantleio/mantle-core/tools/index.js";
+import { PORTFOLIO_DEFAULT_TOKENS } from "@mantleio/mantle-core/config/tokens.js";
+import type { Network } from "@mantleio/mantle-core/types.js";
 import { formatKeyValue, formatTable, formatJson } from "../formatter.js";
 import { parseCommaList } from "../utils.js";
 
@@ -37,10 +39,16 @@ export function registerAccount(parent: Command): void {
     .command("token-balances")
     .description("Batch read ERC-20 token balances")
     .argument("<address>", "wallet address")
-    .requiredOption("--tokens <tokens>", "comma-separated token symbols or addresses")
+    .option(
+      "--tokens <tokens>",
+      "comma-separated token symbols or addresses (defaults to a curated whitelist if omitted)"
+    )
     .action(async (address: string, opts: Record<string, unknown>, cmd: Command) => {
       const globals = cmd.optsWithGlobals();
-      const tokens = parseCommaList(opts.tokens as string);
+      const network = (globals.network as Network) ?? "mainnet";
+      const tokens = opts.tokens
+        ? parseCommaList(opts.tokens as string)
+        : [...PORTFOLIO_DEFAULT_TOKENS[network]];
       const result = await allTools["mantle_getTokenBalances"].handler({
         address,
         tokens,

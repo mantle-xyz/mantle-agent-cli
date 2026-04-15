@@ -292,10 +292,10 @@ const CAPABILITIES: CapabilityEntry[] = [
     category: "query",
     mutates: false,
     auth: "required",
-    summary: "Enumerate all V3 LP positions for a wallet across Agni and Fluxion: tick ranges, liquidity, uncollected fees, in-range status.",
-    cli_command: "mantle-cli lp positions --owner <address> --json",
+    summary: "[DISABLED] V3 position enumeration is disabled: Agni's NonfungiblePositionManager lacks ERC721Enumerable and the Transfer-event fallback is unreliable on Mantle RPC. Use a block explorer (Mantlescan) or https://agni.finance to find your position token IDs, then pass them directly to mantle_buildCollectFees / mantle_buildRemoveLiquidity.",
+    cli_command: "mantle-cli lp positions --owner <address> --json  # disabled — prints a message",
     example: "{ \"owner\": \"0x1234...\" }",
-    tags: ["LP", "position", "V3", "NFT", "wallet"]
+    tags: ["LP", "position", "V3", "NFT", "wallet", "disabled"]
   },
   {
     id: "mantle_getLBPositions",
@@ -344,18 +344,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     workflow_before: ["mantle_getV3PoolState", "mantle_analyzePool"],
     tags: ["pool", "discover", "factory", "all DEX"]
   },
-  {
-    id: "mantle_discoverTopPools",
-    name: "Discover Top Pools",
-    category: "query",
-    mutates: false,
-    auth: "none",
-    summary: "Discover the best LP opportunities across ALL Mantle DEXes. No token pair required — scans entire ecosystem via DexScreener, returns ranked pools with TVL, 24h volume, and fee APR. Supports sort by volume/apr/tvl and provider filtering.",
-    cli_command: "mantle-cli lp top-pools --sort-by <volume|apr|tvl> --limit <n> --provider <dex> --min-tvl <usd> --json",
-    example: "{ \"sort_by\": \"apr\", \"limit\": 10, \"min_tvl_usd\": 10000 }",
-    workflow_before: ["mantle_analyzePool", "mantle_buildAddLiquidity"],
-    tags: ["pool", "discover", "top", "APR", "volume", "TVL", "LP", "yield", "best", "recommend"]
-  },
+  // mantle_discoverTopPools — temporarily disabled (DexScreener rate-limit issues)
 
   // ── DeFi Write (Transaction Builders) ──────────────────────────────────
   {
