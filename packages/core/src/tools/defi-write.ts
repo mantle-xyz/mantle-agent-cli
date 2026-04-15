@@ -2097,8 +2097,8 @@ async function buildMoeAddLiquidity(params: {
   const tokenBIsX = tokenB.address.toLowerCase() === pairTokenX.toLowerCase();
   if (!tokenAIsX && !tokenBIsX) {
     throw new MantleMcpError(
-      "POOL_NOT_FOUND",
-      `LB pair tokenX (${pairTokenX}) matches neither ${tokenA.symbol} (${tokenA.address}) nor ${tokenB.symbol} (${tokenB.address}).`,
+      "TOKEN_MISMATCH",
+      `LB pair tokenX (${pairTokenX}) matches neither ${tokenA.symbol} (${tokenA.address}) nor ${tokenB.symbol} (${tokenB.address}). The pair was found but its token composition is unexpected.`,
       "Re-check token addresses and bin step. The pair may be misconfigured.",
       { pair: pairAddr, pairTokenX, tokenA: tokenA.address, tokenB: tokenB.address }
     );
@@ -2131,18 +2131,30 @@ async function buildMoeAddLiquidity(params: {
       );
     }
 
-    // Validate distribution sums equal 1e18 (LB router enforces this on-chain)
+    // Validate distribution sums.
+    // The LB router enforces sum <= 1e18 per token, but allows sum == 0 when the
+    // corresponding amount is also 0 (one-sided deposits are a first-class use case).
     const ONE_E18 = BigInt("1000000000000000000");
+    const TOLERANCE = 1000n; // allow minor float-rounding drift from JS callers
     const sumX = distributionX.reduce((a, b) => a + BigInt(Math.floor(b)), 0n);
     const sumY = distributionY.reduce((a, b) => a + BigInt(Math.floor(b)), 0n);
-    if (sumX !== ONE_E18 || sumY !== ONE_E18) {
+
+    const xExpectsNonZero = amountXRaw > 0n;
+    const yExpectsNonZero = amountYRaw > 0n;
+    const xDrift = sumX > ONE_E18 ? sumX - ONE_E18 : ONE_E18 - sumX;
+    const yDrift = sumY > ONE_E18 ? sumY - ONE_E18 : ONE_E18 - sumY;
+
+    const xInvalid = xExpectsNonZero ? xDrift > TOLERANCE : sumX !== 0n;
+    const yInvalid = yExpectsNonZero ? yDrift > TOLERANCE : sumY !== 0n;
+
+    if (xInvalid || yInvalid) {
       throw new MantleMcpError(
         "INVALID_INPUT",
-        `distribution_x must sum to 1e18 (got ${sumX}), distribution_y must sum to 1e18 (got ${sumY}). ` +
-        `The LB router enforces this invariant on-chain.`,
-        "Each distribution array should sum to exactly 1000000000000000000 (1e18). " +
-        "Use 0 for bins that should not receive the respective token.",
-        { sum_x: sumX.toString(), sum_y: sumY.toString(), expected: ONE_E18.toString() }
+        `Distribution sum mismatch: distribution_x sums to ${sumX} (expected ${xExpectsNonZero ? "~1e18" : "0"}), ` +
+        `distribution_y sums to ${sumY} (expected ${yExpectsNonZero ? "~1e18" : "0"}).`,
+        "Each distribution array must sum to 1e18 when the corresponding token amount is non-zero, " +
+        "or 0 when the token amount is 0 (one-sided deposit).",
+        { sum_x: sumX.toString(), sum_y: sumY.toString(), amount_x: amountXRaw.toString(), amount_y: amountYRaw.toString() }
       );
     }
   } else {
@@ -3236,8 +3248,11 @@ export async function buildCollectFees(
     );
   }
 
+  const pokeNote = liquidity > 0n
+    ? " Actual collected amount may be higher after the poke settles pending fees."
+    : " Position is closed (zero liquidity); tokensOwed reflects all available fees.";
   const warnings: string[] = [
-    `Pre-poke tokensOwed: token0=${tokensOwed0.toString()}, token1=${tokensOwed1.toString()}. Actual collected amount may be higher after the poke settles pending fees.`
+    `Pre-poke tokensOwed: token0=${tokensOwed0.toString()}, token1=${tokensOwed1.toString()}.${pokeNote}`
   ];
 
   const deadline = d.deadline();
