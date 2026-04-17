@@ -71,6 +71,8 @@ export async function buildTx(
     value: string;
     chainId: number;
     gas?: string;
+    maxFeePerGas?: string;
+    maxPriorityFeePerGas?: string;
   };
   warnings: string[];
   [key: string]: unknown;

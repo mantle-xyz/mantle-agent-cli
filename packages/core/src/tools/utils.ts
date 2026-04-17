@@ -140,7 +140,7 @@ async function parseUnitsHandler(
     throw new MantleMcpError(
       "INVALID_INPUT",
       "decimals must be an integer between 0 and 77.",
-      "Common values: 18 (MNT/WETH), 6 (USDC/USDT), 8 (WBTC).",
+      "Common values: 18 (MNT/WETH), 6 (USDC/USDT), 8 (WBTC). Do NOT guess token decimals.",
       { decimals }
     );
   }
@@ -183,7 +183,7 @@ async function formatUnitsHandler(
     throw new MantleMcpError(
       "INVALID_INPUT",
       "decimals must be an integer between 0 and 77.",
-      "Common values: 18 (MNT/WETH), 6 (USDC/USDT), 8 (WBTC).",
+      "Common values: 18 (MNT/WETH), 6 (USDC/USDT), 8 (WBTC). Do NOT guess token decimals.",
       { decimals }
     );
   }
@@ -284,7 +284,8 @@ async function encodeCallHandler(
     throw new MantleMcpError(
       "ENCODING_FAILED",
       `Failed to encode function call: ${err.message}`,
-      "Check that the function name exists in the ABI and the args match the expected types.",
+      "Check that the function name exists in the ABI and the args match the expected types. " +
+        "Do NOT manually construct calldata hex or guess function argument encoding.",
       { function_name: functionName, args: functionArgs }
     );
   }
@@ -302,7 +303,8 @@ async function buildRawTxHandler(
     throw new MantleMcpError(
       "INVALID_ADDRESS",
       `'to' must be a valid Ethereum address, got: ${toRaw}`,
-      "Provide a checksummed or lowercase 0x-prefixed 40-hex-character address.",
+      "Provide a checksummed or lowercase 0x-prefixed 40-hex-character address. " +
+        "Do NOT guess or fabricate contract addresses.",
       { field: "to", value: toRaw }
     );
   }
@@ -410,7 +412,9 @@ async function buildRawTxHandler(
     warnings: [
       "⚠ UNVERIFIED MANUAL CONSTRUCTION — this transaction was NOT built by a dedicated CLI command. " +
         "The calldata, target address, and value have NOT been validated against known protocol ABIs. " +
-        "Verify all fields carefully before signing."
+        "Verify all fields carefully before signing.",
+      "Gas fields (gas, maxFeePerGas, maxPriorityFeePerGas) are NOT pre-estimated for raw transactions. " +
+        "The signer MUST call eth_estimateGas and populate fee parameters before broadcasting."
     ],
     built_at_utc: nowUtc()
   };
