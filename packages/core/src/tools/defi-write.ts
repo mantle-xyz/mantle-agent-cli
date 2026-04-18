@@ -20,6 +20,7 @@ import { MantleMcpError } from "../errors.js";
 import { getPublicClient } from "../lib/clients.js";
 import { ERC20_ABI } from "../lib/abis/erc20.js";
 import { normalizeNetwork } from "../lib/network.js";
+import { decodeRevertFromError, revertInfoToDetails } from "../lib/revert-decoder.js";
 import {
   resolveTokenInput as resolveTokenInputFromRegistry,
   type ResolvedTokenInput
@@ -29,6 +30,7 @@ import {
   isWhitelistedContract,
   whitelistLabel
 } from "../config/protocols.js";
+import { isWhitelistedTokenAddress } from "../config/tokens.js";
 import type { Tool, Network } from "../types.js";
 import { CHAIN_CONFIGS } from "../config/chains.js";
 
@@ -262,12 +264,18 @@ const DEFAULT_DEADLINE_SECONDS = 1200; // 20 minutes
 const MAX_UINT256 = 2n ** 256n - 1n;
 
 /**
- * xStocks RWA tokens — these ONLY have liquidity on Fluxion (USDC pairs).
- * Using any other provider will fail with no pool found.
+ * xStocks RWA tokens — these ONLY have liquidity on Fluxion (USDC pairs,
+ * fee_tier=3000). Using any other provider will fail with no pool found.
+ *
+ * Source: skills/mantle-openclaw-competition/references/asset-whitelist.md
  */
 const XSTOCKS_SYMBOLS = new Set([
-  "WTSLAX", "WAAPLX", "WCRCLX", "WSPYX", "WHOODX",
-  "WMSTRX", "WNVDAX", "WGOOGLX", "WMETAX", "WQQQX"
+  // Wrapped xStocks — the CLI's primary swap/LP path
+  "WMETAX", "WTSLAX", "WGOOGLX", "WNVDAX", "WQQQX",
+  "WAAPLX", "WSPYX", "WMSTRX",
+  // Unwrapped xStocks — tokens exist on the whitelist; same Fluxion-only routing rule
+  "METAX", "TSLAX", "GOOGLX", "NVDAX", "QQQX",
+  "AAPLX", "SPYX", "MSTRX"
 ]);
 
 /** Derive chain ID from network config instead of hardcoding. */
@@ -401,10 +409,34 @@ async function resolveToken(
     throw new MantleMcpError(
       "TOKEN_NOT_FOUND",
       `Cannot determine decimals for token '${input}'. Provide a known symbol or token address from the Mantle token list.`,
-      "Use a well-known token symbol (WMNT, USDC, USDT, USDT0, USDe, mETH) or a verified address.",
+      "Use a well-known token symbol (WMNT, USDC, USDT, USDT0, USDe, cmETH) or a verified address.",
       { token: input }
     );
   }
+
+  // Hard Constraint #10: write-side tools may only operate on whitelisted
+  // ERC-20 tokens. resolveTokenInput() will happily fall back to an on-chain
+  // ABI read for any arbitrary contract, so we enforce the whitelist here —
+  // after symbol/decimals are known, before any calldata is built. Read-only
+  // helpers (portfolio, quotes) deliberately skip this guard.
+  if (!isWhitelistedTokenAddress(resolved.address, network)) {
+    throw new MantleMcpError(
+      "TOKEN_NOT_WHITELISTED",
+      `Token '${input}' (${resolved.address}) is not on the OpenClaw × Mantle ` +
+        `whitelist for ${network}. Write-side tools refuse non-whitelisted tokens ` +
+        `even if the user provides a raw address.`,
+      "Use a whitelisted symbol (WMNT, WETH, USDC, USDT, USDT0, USDe, cmETH, MOE, " +
+        "FBTC, xStocks, wXStocks, BSB/ELSA/VOOI/SCOR) or look up the competition " +
+        "asset whitelist before retrying.",
+      {
+        token: input,
+        resolved_symbol: resolved.symbol ?? null,
+        resolved_address: resolved.address,
+        network
+      }
+    );
+  }
+
   return {
     address: resolved.address,
     symbol: resolved.symbol ?? resolved.address,
@@ -809,15 +841,31 @@ function wrapBuildHandler(
         } catch (err) {
           // Only estimateGas / getBlock failures reach here — the nonce
           // fetch is captured into its own sentinel and cannot throw.
+          //
+          // When the revert was on-chain (vs. RPC down), viem nests the
+          // raw revert bytes somewhere in the cause chain. Pull them out
+          // and attach the selector + decoded message so callers can
+          // diagnose the revert without falling back to raw curl or
+          // fabricated selector tables.
+          const revertInfo = decodeRevertFromError(err);
+          const revertDetails = revertInfoToDetails(revertInfo);
+          const baseMessage = `Gas estimation failed: ${err instanceof Error ? err.message : String(err)}`;
+          const enrichedMessage = revertInfo?.message
+            ? `${baseMessage} [revert: ${revertInfo.message}]`
+            : baseMessage;
           throw new MantleMcpError(
             "GAS_ESTIMATION_FAILED",
-            `Gas estimation failed: ${err instanceof Error ? err.message : String(err)}`,
-            "The transaction may revert on-chain. Check that the sender has sufficient balance " +
-              "and that the calldata/target are correct. Do NOT submit without a valid gas estimate.",
+            enrichedMessage,
+            "The transaction may revert on-chain. `revert_raw` is always set when the call " +
+              "reverted (even as `0x`); `revert_selector` is the 4-byte custom error id, set " +
+              "when the revert returned ≥4 bytes. `revert_message` decodes Error(string) and " +
+              "Panic(uint256) automatically; custom errors outside that set are surfaced raw so " +
+              "you can look them up externally. Do NOT submit without a valid gas estimate.",
             {
               to: result.unsigned_tx.to,
               sender: sender ?? null,
               intent: result.intent ?? null,
+              ...revertDetails,
             }
           );
         }
@@ -3923,7 +3971,7 @@ export async function buildAaveSupply(
     warnings.push(
       `ISOLATION MODE: ${reserve.symbol} is an Isolation Mode asset (debt ceiling $${ceilingUsd}). ` +
       `If this is your ONLY collateral you will enter Isolation Mode and can ONLY borrow: ${borrowable}. ` +
-      `Other assets (e.g. sUSDe, FBTC, wrsETH) CANNOT be borrowed in Isolation Mode.`
+      `Other assets (e.g. FBTC) CANNOT be borrowed in Isolation Mode.`
     );
   }
 
@@ -5138,7 +5186,7 @@ export const defiWriteTools: Record<string, Tool> = {
       "Always use THIS tool for Aave supply operations. Remember to approve the asset for the Pool contract first.\n\n" +
       "IMPORTANT: Only USDT0 is supported on Aave V3 — NOT USDT. If the user holds USDT, swap USDT → USDT0 on Merchant Moe first.\n\n" +
       "ISOLATION MODE: WETH and WMNT are Isolation Mode assets. Supplying them as your ONLY collateral " +
-      "restricts borrows to: USDC, USDT0, USDe, GHO. Other assets CANNOT be borrowed in Isolation Mode.\n\n" +
+      "restricts borrows to: USDC, USDT0, USDe. Other assets CANNOT be borrowed in Isolation Mode.\n\n" +
       "Examples:\n- Supply 100 USDC: asset='USDC', amount='100', on_behalf_of='0x...'\n- Supply 10 WMNT: asset='WMNT', amount='10', on_behalf_of='0x...'",
     inputSchema: {
       type: "object",
@@ -5175,8 +5223,8 @@ export const defiWriteTools: Record<string, Tool> = {
       "Build an unsigned Aave V3 borrow transaction. Requires sufficient collateral deposited first.\n\n" +
       "IMPORTANT: Only USDT0 is supported on Aave V3 — NOT USDT. If the user wants to borrow Tether, use asset='USDT0'.\n\n" +
       "ISOLATION MODE: If the borrower's only collateral is an Isolation Mode asset (WETH, WMNT), " +
-      "they can ONLY borrow assets flagged as borrowableInIsolation: USDC, USDT0, USDe, GHO. " +
-      "Attempting to borrow other assets (sUSDe, FBTC, syrupUSDT, wrsETH, WETH, WMNT) will REVERT.\n\n" +
+      "they can ONLY borrow assets flagged as borrowableInIsolation: USDC, USDT0, USDe. " +
+      "Attempting to borrow other assets (FBTC, WETH, WMNT) will REVERT.\n\n" +
       "Examples:\n- Borrow 50 USDC at variable rate: asset='USDC', amount='50', on_behalf_of='0x...'\n- Borrow 10 WMNT at variable rate: asset='WMNT', amount='10', on_behalf_of='0x...'",
     inputSchema: {
       type: "object",
@@ -5293,8 +5341,8 @@ export const defiWriteTools: Record<string, Tool> = {
     description:
       "Build an unsigned Aave V3 transaction to enable or disable a supplied asset as collateral.\n\n" +
       "MSG.SENDER: This transaction operates on the SIGNING WALLET (msg.sender), not an " +
-      "arbitrary address. The user param is only used for preflight diagnostics.\n\n" +
-      "DIAGNOSTICS: When user is provided, runs on-chain checks before building the tx:\n" +
+      "arbitrary address. The owner param is only used for preflight diagnostics.\n\n" +
+      "DIAGNOSTICS: When owner is provided, runs on-chain checks before building the tx:\n" +
       "- Verifies aToken balance > 0 (user has actually supplied)\n" +
       "- Checks reserve config (LTV > 0, active, not frozen)\n" +
       "- Reads user config bitmap to detect if collateral is already enabled/disabled\n" +
