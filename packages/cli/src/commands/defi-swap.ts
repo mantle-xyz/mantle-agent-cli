@@ -54,9 +54,9 @@ export function registerSwap(parent: Command): void {
       "Bin step from prior quote's resolved_pool_params (for cross-validation)",
       (v: string) => parseIntegerOption(v, "--quote-bin-step")
     )
-    .option(
+    .requiredOption(
       "--owner <address>",
-      "wallet address that owns token_in — enables blocking INSUFFICIENT_ALLOWANCE check (prevents STF reverts)"
+      "signer wallet (token_in holder). Required for deterministic nonce/gas pinning and blocking INSUFFICIENT_ALLOWANCE check."
     )
     .action(async (opts: Record<string, unknown>, cmd: Command) => {
       const globals = cmd.optsWithGlobals();
@@ -88,10 +88,12 @@ export function registerSwap(parent: Command): void {
     .command("wrap-mnt")
     .description("Build an unsigned wrap MNT → WMNT transaction")
     .requiredOption("--amount <amount>", "decimal amount of MNT to wrap")
+    .requiredOption("--sender <address>", "signer wallet. Required for deterministic nonce/gas pinning.")
     .action(async (opts: Record<string, unknown>, cmd: Command) => {
       const globals = cmd.optsWithGlobals();
       const result = await allTools["mantle_buildWrapMnt"].handler({
         amount: String(opts.amount),
+        sender: opts.sender,
         network: globals.network
       });
       if (globals.json) {
@@ -106,10 +108,12 @@ export function registerSwap(parent: Command): void {
     .command("unwrap-mnt")
     .description("Build an unsigned unwrap WMNT → MNT transaction")
     .requiredOption("--amount <amount>", "decimal amount of WMNT to unwrap")
+    .requiredOption("--sender <address>", "signer wallet (WMNT holder). Required for deterministic nonce/gas pinning.")
     .action(async (opts: Record<string, unknown>, cmd: Command) => {
       const globals = cmd.optsWithGlobals();
       const result = await allTools["mantle_buildUnwrapMnt"].handler({
         amount: String(opts.amount),
+        sender: opts.sender,
         network: globals.network
       });
       if (globals.json) {
