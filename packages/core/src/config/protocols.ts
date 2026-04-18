@@ -82,6 +82,7 @@ export const MANTLE_PROTOCOLS: Record<Network, Record<string, ProtocolEntry>> = 
       contracts: {
         pool: "0x458F293454fE0d67EC0655f3672301301DD51422",
         weth_gateway: "0x9C6cCAC66b1c9AbA4855e2dD284b9e16e41E06eA",
+        pool_addresses_provider: "0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f",
         pool_data_provider: "0x487c5c669D9eee6057C44973207101276cf73b68"
       }
     },
