@@ -262,8 +262,9 @@ test("Verify: Agni LP position exists", async () => {
 
 test("Verify: Moe LB position exists", async () => {
   const result = await runCli([
-    "lp", "lb-positions",
+    "lp", "positions",
     "--owner", wallet.address,
+    "--provider", "merchant_moe",
   ]);
   assertEqual(result.exitCode, 0, "exit code");
   assertDefined(result.json, "json output");

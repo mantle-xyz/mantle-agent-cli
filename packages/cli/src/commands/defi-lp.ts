@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { allTools } from "@mantleio/mantle-core/tools/index.js";
-import { formatKeyValue, formatTable, formatJson } from "../formatter.js";
+import { formatKeyValue, formatTable, formatJson, formatUnsignedTx } from "../formatter.js";
 import { parseIntegerOption, parseNumberOption, parseJsonArray, parseBigIntArray } from "../utils.js";
 
 /**
@@ -152,7 +152,7 @@ export function registerLp(parent: Command): void {
       if (globals.json) {
         formatJson(result);
       } else {
-        formatUnsignedTxResult(result as Record<string, unknown>);
+        formatUnsignedTx(result as Record<string, unknown>);
       }
     });
 
@@ -255,7 +255,7 @@ export function registerLp(parent: Command): void {
       if (globals.json) {
         formatJson(result);
       } else {
-        formatUnsignedTxResult(result as Record<string, unknown>);
+        formatUnsignedTx(result as Record<string, unknown>);
       }
     });
 
@@ -310,7 +310,7 @@ export function registerLp(parent: Command): void {
       if (globals.json) {
         formatJson(result);
       } else {
-        formatUnsignedTxResult(result as Record<string, unknown>);
+        formatUnsignedTx(result as Record<string, unknown>);
       }
     });
 
@@ -426,58 +426,10 @@ export function registerLp(parent: Command): void {
       }
     });
 
-  // ── lb-positions ────────────────────────────────────────────────────
-  group
-    .command("lb-positions")
-    .aliases(["moe-positions"])
-    .description(
-      "Scan Merchant Moe Liquidity Book (LB) LP positions for a wallet. " +
-      "Use when the user specifically asks about Moe/LB positions. " +
-      "Checks known LB pairs around the active bin (±25 bins). " +
-      "(For a general \"list my LP positions\" query, prefer `lp positions` which routes by --provider.)"
-    )
-    .requiredOption("--owner <address>", "wallet address to query")
-    .action(async (opts: Record<string, unknown>, cmd: Command) => {
-      const globals = cmd.optsWithGlobals();
-      const result = await allTools["mantle_getLBPositions"].handler({
-        owner: opts.owner,
-        network: globals.network
-      });
-      if (globals.json) {
-        formatJson(result);
-      } else {
-        const data = result as Record<string, unknown> | undefined;
-        if (!data) { console.log("\n  Error: no data returned.\n"); return; }
-        const positions = (data.positions ?? []) as Record<string, unknown>[];
-        // Show coverage warning BEFORE results (F-02)
-        if (data.note) {
-          console.log(`\n  Note: ${data.note}`);
-        }
-        if (positions.length === 0) {
-          console.log("\n  No Merchant Moe LB positions found within scan range.\n");
-        } else {
-          for (const pos of positions) {
-            const tokenX = (pos.token_x ?? {}) as Record<string, unknown>;
-            const tokenY = (pos.token_y ?? {}) as Record<string, unknown>;
-            console.log(
-              `\n  ${tokenX.symbol ?? "?"}/${tokenY.symbol ?? "?"} (bin step: ${pos.bin_step}) — ` +
-              `${pos.total_bins_with_liquidity} bins with liquidity`
-            );
-            const bins = (pos.bins ?? []) as Record<string, unknown>[];
-            formatTable(bins, [
-              { key: "bin_id", label: "Bin ID", align: "right" },
-              { key: "share_pct", label: "Share %", align: "right",
-                format: (v) => v != null ? `${v}%` : "?" },
-              { key: "user_amount_x", label: `Amount ${tokenX.symbol ?? "X"}`, align: "right",
-                format: (v) => v != null ? String(v) : "?" },
-              { key: "user_amount_y", label: `Amount ${tokenY.symbol ?? "Y"}`, align: "right",
-                format: (v) => v != null ? String(v) : "?" }
-            ]);
-          }
-          console.log();
-        }
-      }
-    });
+  // `lp lb-positions` was removed — it was a strict subset of
+  // `lp positions --provider merchant_moe` (same underlying
+  // mantle_getLBPositions tool). Use the unified command:
+  //   mantle-cli lp positions --owner <addr> --provider merchant_moe
 
   // ── pool-state ──────────────────────────────────────────────────────
   group
@@ -560,7 +512,7 @@ export function registerLp(parent: Command): void {
       if (globals.json) {
         formatJson(result);
       } else {
-        formatUnsignedTxResult(result as Record<string, unknown>);
+        formatUnsignedTx(result as Record<string, unknown>);
       }
     });
 
@@ -618,20 +570,9 @@ export function registerLp(parent: Command): void {
       }
     });
 
-  // ── top-pools (temporarily disabled — DexScreener rate-limit issues) ──
-  group
-    .command("top-pools")
-    .description("[DISABLED] Discover top LP opportunities (temporarily disabled)")
-    .action(async () => {
-      console.error(
-        "\n  This command is temporarily disabled.\n\n" +
-        "  DexScreener API rate-limiting causes frequent query failures.\n" +
-        "  A fix with retry/backoff logic is in progress.\n\n" +
-        "  Workaround: use 'lp find-pools' for specific token pairs,\n" +
-        "  or 'lp analyze' for deep pool analysis.\n"
-      );
-      process.exitCode = 1;
-    });
+  // `lp top-pools` was removed — it had been disabled due to DexScreener
+  // rate-limit issues and only emitted an error. Use `lp find-pools` for a
+  // specific pair or `lp analyze` for a deep pool analysis.
 
   // ── find-pools ──────────────────────────────────────────────────────
   group
@@ -868,58 +809,4 @@ export function registerLp(parent: Command): void {
         }
       }
     });
-}
-
-// ---------------------------------------------------------------------------
-// Shared formatter for unsigned-tx results
-// ---------------------------------------------------------------------------
-
-function formatUnsignedTxResult(data: Record<string, unknown>): void {
-  const tx = data.unsigned_tx as Record<string, unknown> | undefined;
-  const warnings = (data.warnings ?? []) as string[];
-
-  formatKeyValue(
-    {
-      intent: data.intent,
-      human_summary: data.human_summary,
-      tx_to: tx?.to,
-      tx_value: tx?.value,
-      tx_chainId: tx?.chainId,
-      tx_data: truncateHex(tx?.data as string | undefined),
-      tx_gas: tx?.gas ?? "auto",
-      tx_maxFeePerGas: tx?.maxFeePerGas ?? "—",
-      tx_maxPriorityFeePerGas: tx?.maxPriorityFeePerGas ?? "—",
-      built_at: data.built_at_utc
-    },
-    {
-      labels: {
-        intent: "Intent",
-        human_summary: "Summary",
-        tx_to: "To",
-        tx_value: "Value (hex)",
-        tx_chainId: "Chain ID",
-        tx_data: "Calldata",
-        tx_gas: "Gas Limit",
-        tx_maxFeePerGas: "Max Fee/Gas",
-        tx_maxPriorityFeePerGas: "Priority Fee",
-        built_at: "Built At"
-      }
-    }
-  );
-
-  if (warnings.length > 0) {
-    console.log("  Warnings:");
-    for (const w of warnings) {
-      console.log(`    - ${w}`);
-    }
-    console.log();
-  }
-}
-
-function truncateHex(hex: string | undefined): string {
-  if (!hex) return "null";
-  // Never truncate calldata — agents and users need the full hex to sign transactions.
-  // Previously this sliced the middle out, causing manual-paste errors (e.g. dropped chars).
-  if (hex.length <= 66) return hex;
-  return `${hex} (${hex.length} chars)`;
 }

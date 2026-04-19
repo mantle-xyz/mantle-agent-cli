@@ -183,7 +183,8 @@ describe("CLI integration", () => {
     expect(stdout).toContain("pool-liquidity");
     expect(stdout).toContain("pool-opportunities");
     expect(stdout).toContain("tvl");
-    expect(stdout).toContain("lending-markets");
+    // `defi lending-markets` removed — use `aave markets`.
+    // `defi analyze-pool` removed — use `lp analyze`.
   });
 
   it("defi swap-quote rejects unsupported network", async () => {
@@ -216,8 +217,8 @@ describe("CLI integration", () => {
     expectJsonErrorCode(stdout, "UNSUPPORTED_NETWORK");
   });
 
-  it("defi lending-markets rejects unsupported network", async () => {
-    const { stdout, exitCode } = await run(["defi", "lending-markets", "-n", "invalidnet", "--json"]);
+  it("aave markets rejects unsupported network", async () => {
+    const { stdout, exitCode } = await run(["aave", "markets", "-n", "invalidnet", "--json"]);
     expect(exitCode).toBe(1);
     expectJsonErrorCode(stdout, "UNSUPPORTED_NETWORK");
   });

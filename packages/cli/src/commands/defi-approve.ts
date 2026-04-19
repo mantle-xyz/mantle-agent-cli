@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { allTools } from "@mantleio/mantle-core/tools/index.js";
-import { formatKeyValue, formatJson } from "../formatter.js";
+import { formatJson, formatUnsignedTx } from "../formatter.js";
 
 /**
  * Top-level ERC-20 approve command:
@@ -29,60 +29,7 @@ export function registerApprove(parent: Command): void {
       if (globals.json) {
         formatJson(result);
       } else {
-        formatUnsignedTxResult(result as Record<string, unknown>);
+        formatUnsignedTx(result as Record<string, unknown>);
       }
     });
-}
-
-// ---------------------------------------------------------------------------
-// Local formatter for unsigned-tx results (mirrors defi-swap.ts)
-// ---------------------------------------------------------------------------
-
-function formatUnsignedTxResult(data: Record<string, unknown>): void {
-  const tx = data.unsigned_tx as Record<string, unknown> | undefined;
-  const warnings = (data.warnings ?? []) as string[];
-
-  const fields: Record<string, unknown> = {
-    intent: data.intent,
-    human_summary: data.human_summary,
-    tx_to: tx?.to,
-    tx_value: tx?.value,
-    tx_chainId: tx?.chainId,
-    tx_data: truncateHex(tx?.data as string | undefined),
-    tx_gas: tx?.gas ?? "auto",
-    tx_maxFeePerGas: tx?.maxFeePerGas ?? "—",
-    tx_maxPriorityFeePerGas: tx?.maxPriorityFeePerGas ?? "—",
-    built_at: data.built_at_utc
-  };
-
-  const labels: Record<string, string> = {
-    intent: "Intent",
-    human_summary: "Summary",
-    tx_to: "To",
-    tx_value: "Value (hex)",
-    tx_chainId: "Chain ID",
-    tx_data: "Calldata",
-    tx_gas: "Gas Limit",
-    tx_maxFeePerGas: "Max Fee/Gas",
-    tx_maxPriorityFeePerGas: "Priority Fee",
-    built_at: "Built At"
-  };
-
-  formatKeyValue(fields, { labels });
-
-  if (warnings.length > 0) {
-    console.log("  Warnings:");
-    for (const w of warnings) {
-      console.log(`    - ${w}`);
-    }
-    console.log();
-  }
-}
-
-function truncateHex(hex: string | undefined): string {
-  if (!hex) return "null";
-  // Never truncate calldata — agents and users need the full hex to sign transactions.
-  // Previously this sliced the middle out, causing manual-paste errors (e.g. dropped chars).
-  if (hex.length <= 66) return hex;
-  return `${hex} (${hex.length} chars)`;
 }

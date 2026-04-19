@@ -33,8 +33,8 @@ console.log("exit:", r2.code);
 console.log("stdout:", r2.stdout.slice(0, 500));
 console.log("stderr:", r2.stderr.slice(0, 500));
 
-console.log("\n=== lp lb-positions ===");
-const r3 = await run(["--network", "mainnet", "--json", "lp", "lb-positions", "--owner", "0xab5a413A2B0EB4bF451b3993E894796AD057f162"]);
+console.log("\n=== lp positions --provider merchant_moe ===");
+const r3 = await run(["--network", "mainnet", "--json", "lp", "positions", "--owner", "0xab5a413A2B0EB4bF451b3993E894796AD057f162", "--provider", "merchant_moe"]);
 console.log("exit:", r3.code);
 console.log("stdout:", r3.stdout.slice(0, 500));
 console.log("stderr:", r3.stderr.slice(0, 300));

@@ -1,6 +1,12 @@
 import type { Command } from "commander";
 import { allTools } from "@mantleio/mantle-core/tools/index.js";
-import { formatKeyValue, formatTable, formatJson } from "../formatter.js";
+import {
+  formatKeyValue,
+  formatTable,
+  formatJson,
+  formatUnsignedTx,
+  type ExtraTxField
+} from "../formatter.js";
 
 const VALID_RATE_MODES = [1, 2] as const;
 
@@ -296,66 +302,20 @@ export function registerAave(parent: Command): void {
 }
 
 // ---------------------------------------------------------------------------
-// Shared formatter for Aave unsigned-tx results
+// Aave-specific formatter — adds aave_reserve extras onto the shared
+// unsigned-tx renderer.
 // ---------------------------------------------------------------------------
 
 function formatAaveResult(data: Record<string, unknown>): void {
-  const tx = data.unsigned_tx as Record<string, unknown> | undefined;
-  const warnings = (data.warnings ?? []) as string[];
   const aaveReserve = data.aave_reserve as Record<string, unknown> | undefined;
-
-  const fields: Record<string, unknown> = {
-    intent: data.intent,
-    human_summary: data.human_summary,
-    tx_to: tx?.to,
-    tx_value: tx?.value,
-    tx_chainId: tx?.chainId,
-    tx_data: truncateHex(tx?.data as string | undefined),
-    tx_gas: tx?.gas ?? "auto",
-    tx_maxFeePerGas: tx?.maxFeePerGas ?? "—",
-    tx_maxPriorityFeePerGas: tx?.maxPriorityFeePerGas ?? "—",
-    built_at: data.built_at_utc
-  };
-
-  const labels: Record<string, string> = {
-    intent: "Intent",
-    human_summary: "Summary",
-    tx_to: "To",
-    tx_value: "Value (hex)",
-    tx_chainId: "Chain ID",
-    tx_data: "Calldata",
-    tx_gas: "Gas Limit",
-    tx_maxFeePerGas: "Max Fee/Gas",
-    tx_maxPriorityFeePerGas: "Priority Fee",
-    built_at: "Built At"
-  };
-
+  const extraFields: ExtraTxField[] = [];
   if (aaveReserve) {
-    fields.aave_asset = aaveReserve.symbol;
-    fields.aave_underlying = aaveReserve.underlying;
-    fields.aave_aToken = aaveReserve.aToken;
-    fields.aave_debtToken = aaveReserve.variableDebtToken;
-    labels.aave_asset = "Aave Asset";
-    labels.aave_underlying = "Underlying";
-    labels.aave_aToken = "aToken";
-    labels.aave_debtToken = "Variable Debt Token";
+    extraFields.push(
+      { key: "aave_asset", label: "Aave Asset", value: aaveReserve.symbol },
+      { key: "aave_underlying", label: "Underlying", value: aaveReserve.underlying },
+      { key: "aave_aToken", label: "aToken", value: aaveReserve.aToken },
+      { key: "aave_debtToken", label: "Variable Debt Token", value: aaveReserve.variableDebtToken }
+    );
   }
-
-  formatKeyValue(fields, { labels });
-
-  if (warnings.length > 0) {
-    console.log("  Warnings:");
-    for (const w of warnings) {
-      console.log(`    - ${w}`);
-    }
-    console.log();
-  }
-}
-
-function truncateHex(hex: string | undefined): string {
-  if (!hex) return "null";
-  // Never truncate calldata — agents and users need the full hex to sign transactions.
-  // Previously this sliced the middle out, causing manual-paste errors (e.g. dropped chars).
-  if (hex.length <= 66) return hex;
-  return `${hex} (${hex.length} chars)`;
+  formatUnsignedTx(data, { extraFields });
 }

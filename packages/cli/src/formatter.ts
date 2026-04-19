@@ -129,6 +129,90 @@ export function disableColors(): void {
   chalk.level = 0;
 }
 
+// ---------------------------------------------------------------------------
+// Shared formatter for unsigned-tx build results.
+//
+// Every DeFi write command (approve / swap / lp / aave) emits the same shape:
+//   { intent, human_summary, unsigned_tx: { to, value, chainId, data, ... },
+//     warnings: string[], built_at_utc, ...extra }
+//
+// Previously this formatter was copy-pasted in four places. Behaviour was
+// slowly drifting (each copy grew its own `poolParams` / `aaveReserve` branch).
+// Keep the base rendering here and let callers pass domain-specific extra
+// rows via `extraFields` / `extraLabels`.
+// ---------------------------------------------------------------------------
+
+export interface ExtraTxField {
+  /** Field key as it appears in the printed order. */
+  key: string;
+  /** Human-readable label in the left column. */
+  label: string;
+  /** Value to render; skipped entirely when null/undefined. */
+  value: unknown;
+}
+
+export function formatUnsignedTx(
+  data: Record<string, unknown>,
+  options: { extraFields?: ExtraTxField[] } = {}
+): void {
+  const tx = data.unsigned_tx as Record<string, unknown> | undefined;
+  const warnings = (data.warnings ?? []) as string[];
+
+  const fields: Record<string, unknown> = {
+    intent: data.intent,
+    human_summary: data.human_summary,
+    tx_to: tx?.to,
+    tx_value: tx?.value,
+    tx_chainId: tx?.chainId,
+    tx_data: truncateTxHex(tx?.data as string | undefined),
+    tx_gas: tx?.gas ?? "auto",
+    tx_maxFeePerGas: tx?.maxFeePerGas ?? "—",
+    tx_maxPriorityFeePerGas: tx?.maxPriorityFeePerGas ?? "—",
+    built_at: data.built_at_utc
+  };
+
+  const labels: Record<string, string> = {
+    intent: "Intent",
+    human_summary: "Summary",
+    tx_to: "To",
+    tx_value: "Value (hex)",
+    tx_chainId: "Chain ID",
+    tx_data: "Calldata",
+    tx_gas: "Gas Limit",
+    tx_maxFeePerGas: "Max Fee/Gas",
+    tx_maxPriorityFeePerGas: "Priority Fee",
+    built_at: "Built At"
+  };
+
+  for (const extra of options.extraFields ?? []) {
+    if (extra.value === null || extra.value === undefined) continue;
+    fields[extra.key] = extra.value;
+    labels[extra.key] = extra.label;
+  }
+
+  formatKeyValue(fields, { labels });
+
+  if (warnings.length > 0) {
+    console.log("  Warnings:");
+    for (const w of warnings) {
+      console.log(`    - ${w}`);
+    }
+    console.log();
+  }
+}
+
+/**
+ * Never truncate calldata — agents and users need the full hex to sign
+ * transactions. Previously this sliced the middle out, causing manual-paste
+ * errors (dropped characters). For very long calldata we append a character
+ * count so humans can sanity-check a paste without visual compare.
+ */
+function truncateTxHex(hex: string | undefined): string {
+  if (!hex) return "null";
+  if (hex.length <= 66) return hex;
+  return `${hex} (${hex.length} chars)`;
+}
+
 function stripAnsi(str: string): string {
   // eslint-disable-next-line no-control-regex
   return str.replace(/\x1B\[[0-9;]*m/g, "");

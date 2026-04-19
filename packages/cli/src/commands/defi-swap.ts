@@ -1,6 +1,11 @@
 import type { Command } from "commander";
 import { allTools } from "@mantleio/mantle-core/tools/index.js";
-import { formatKeyValue, formatTable, formatJson } from "../formatter.js";
+import {
+  formatTable,
+  formatJson,
+  formatUnsignedTx,
+  type ExtraTxField
+} from "../formatter.js";
 import { parseNumberOption, parseIntegerOption } from "../utils.js";
 
 /**
@@ -79,7 +84,7 @@ export function registerSwap(parent: Command): void {
       if (globals.json) {
         formatJson(result);
       } else {
-        formatUnsignedTxResult(result as Record<string, unknown>);
+        formatSwapResult(result as Record<string, unknown>);
       }
     });
 
@@ -99,7 +104,7 @@ export function registerSwap(parent: Command): void {
       if (globals.json) {
         formatJson(result);
       } else {
-        formatUnsignedTxResult(result as Record<string, unknown>);
+        formatUnsignedTx(result as Record<string, unknown>);
       }
     });
 
@@ -119,7 +124,7 @@ export function registerSwap(parent: Command): void {
       if (globals.json) {
         formatJson(result);
       } else {
-        formatUnsignedTxResult(result as Record<string, unknown>);
+        formatUnsignedTx(result as Record<string, unknown>);
       }
     });
 
@@ -179,61 +184,23 @@ export function registerSwap(parent: Command): void {
 }
 
 // ---------------------------------------------------------------------------
-// Shared formatter for unsigned-tx results
+// build-swap-specific formatter — adds pool_params extras onto the shared
+// unsigned-tx renderer.
 // ---------------------------------------------------------------------------
 
-function formatUnsignedTxResult(data: Record<string, unknown>): void {
-  const tx = data.unsigned_tx as Record<string, unknown> | undefined;
-  const warnings = (data.warnings ?? []) as string[];
+function formatSwapResult(data: Record<string, unknown>): void {
   const poolParams = data.pool_params as Record<string, unknown> | undefined;
-
-  const fields: Record<string, unknown> = {
-    intent: data.intent,
-    human_summary: data.human_summary,
-    tx_to: tx?.to,
-    tx_value: tx?.value,
-    tx_chainId: tx?.chainId,
-    tx_data: truncateHex(tx?.data as string | undefined),
-    tx_gas: tx?.gas ?? "auto",
-    tx_maxFeePerGas: tx?.maxFeePerGas ?? "—",
-    tx_maxPriorityFeePerGas: tx?.maxPriorityFeePerGas ?? "—",
-    built_at: data.built_at_utc
-  };
-
-  const labels: Record<string, string> = {
-    intent: "Intent",
-    human_summary: "Summary",
-    tx_to: "To",
-    tx_value: "Value (hex)",
-    tx_chainId: "Chain ID",
-    tx_data: "Calldata",
-    tx_gas: "Gas Limit",
-    tx_maxFeePerGas: "Max Fee/Gas",
-    tx_maxPriorityFeePerGas: "Priority Fee",
-    built_at: "Built At"
-  };
-
+  const extraFields: ExtraTxField[] = [];
   if (poolParams) {
-    if (poolParams.provider) { fields.pool_provider = poolParams.provider; labels.pool_provider = "Pool Provider"; }
-    if (poolParams.fee_tier != null) { fields.pool_fee_tier = poolParams.fee_tier; labels.pool_fee_tier = "Pool Fee Tier"; }
-    if (poolParams.bin_step != null) { fields.pool_bin_step = poolParams.bin_step; labels.pool_bin_step = "Pool Bin Step"; }
-  }
-
-  formatKeyValue(fields, { labels });
-
-  if (warnings.length > 0) {
-    console.log("  Warnings:");
-    for (const w of warnings) {
-      console.log(`    - ${w}`);
+    if (poolParams.provider != null) {
+      extraFields.push({ key: "pool_provider", label: "Pool Provider", value: poolParams.provider });
     }
-    console.log();
+    if (poolParams.fee_tier != null) {
+      extraFields.push({ key: "pool_fee_tier", label: "Pool Fee Tier", value: poolParams.fee_tier });
+    }
+    if (poolParams.bin_step != null) {
+      extraFields.push({ key: "pool_bin_step", label: "Pool Bin Step", value: poolParams.bin_step });
+    }
   }
-}
-
-function truncateHex(hex: string | undefined): string {
-  if (!hex) return "null";
-  // Never truncate calldata — agents and users need the full hex to sign transactions.
-  // Previously this sliced the middle out, causing manual-paste errors (e.g. dropped chars).
-  if (hex.length <= 66) return hex;
-  return `${hex} (${hex.length} chars)`;
+  formatUnsignedTx(data, { extraFields });
 }

@@ -252,7 +252,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Read Aave V3 lending market data: supply APY, borrow APY, TVL, LTV, liquidation threshold.",
-    cli_command: "mantle-cli defi lending-markets --json",
+    cli_command: "mantle-cli aave markets --json",
     example: "{ \"protocol\": \"aave_v3\" }",
     tags: ["lending", "Aave", "APY", "supply", "borrow"]
   },
@@ -314,7 +314,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "required",
     summary: "Scan a wallet's Merchant Moe Liquidity Book LP positions (+-25 bins around active price, known pairs only): bin IDs, share percentage, estimated token amounts per bin. IMPORTANT: tokens locked in LB positions do NOT appear in mantle_getTokenBalances — always call this when checking a wallet's full balance or portfolio.",
-    cli_command: "mantle-cli lp lb-positions --owner <address> --json",
+    cli_command: "mantle-cli lp positions --owner <address> --provider merchant_moe --json",
     example: "{ \"owner\": \"0x1234...\" }",
     tags: ["LP", "position", "LB", "Merchant Moe", "bin", "wallet", "balance", "portfolio", "hidden assets"]
   },
@@ -337,7 +337,7 @@ const CAPABILITIES: CapabilityEntry[] = [
     mutates: false,
     auth: "none",
     summary: "Deep pool analysis: fee APR from 24h volume/TVL, multi-range APR comparison, risk scoring (TVL/volatility), and investment return projections.",
-    cli_command: "mantle-cli defi analyze-pool --token-a <token> --token-b <token> --fee-tier <tier> --provider <dex> --investment <usd> --json",
+    cli_command: "mantle-cli lp analyze --token-a <token> --token-b <token> --fee-tier <tier> --provider <dex> --investment-usd <usd> --json",
     example: "{ \"token_a\": \"WMNT\", \"token_b\": \"USDC\", \"fee_tier\": 3000, \"provider\": \"agni\" }",
     workflow_before: ["mantle_buildAddLiquidity"],
     tags: ["LP", "APR", "risk", "analysis", "yield", "pool"]
