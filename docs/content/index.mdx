@@ -1,14 +1,14 @@
-# Mantle MCP Documentation
+# Mantle Agent Scaffold Documentation
 
-Welcome to the documentation site for **mantle-agent-scaffold**, covering implementation status up to **v0.1.11**.
+Welcome to the documentation site for **mantle-agent-scaffold**, covering implementation status up to **v0.1.18**.
 
 ## Version Scope
 
 This documentation reflects:
 
-- Core MCP server capabilities in `src/`
-- v0.2 E2E test architecture and scenario design in `e2e/`
-- Release hardening and compatibility updates included in **v0.1.11**
+- Core library capabilities in `packages/core/`
+- CLI tooling in `packages/cli/`
+- Skills integration
 
 ## Where To Start
 
@@ -17,12 +17,10 @@ If you are new to the project, start with:
 1. [Concepts](/concepts)
 2. [Architecture Model](/concepts/architecture)
 3. [Testing Philosophy](/concepts/testing)
-4. [Skills and MCP Usage](/concepts/skills)
+4. [Skills Usage](/concepts/skills)
 5. [External Agent Integration](/concepts/external-agents)
 
-## Current Status Snapshot (v0.1.11)
+## Current Status Snapshot (v0.1.18)
 
-- 19 MCP tools are implemented across chain, registry, account, token, DeFi read, indexer, and diagnostics domains.
-- E2E suite runs against live LLMs with scenario-based assertions and release gate evaluation.
-- OpenRouter compatibility is handled explicitly in the E2E runner.
-- Documentation and implementation are aligned for the v0.1.11 release line.
+- 47 CLI tools are implemented across chain, registry, account, token, DeFi read/write, indexer, and diagnostics domains.
+- Documentation and implementation are aligned for the v0.1.18 release line.

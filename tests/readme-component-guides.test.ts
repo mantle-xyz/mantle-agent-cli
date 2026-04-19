@@ -24,11 +24,4 @@ describe("component readmes", () => {
     expect(readme).toContain("registry resolve");
   });
 
-  it("documents the MCP server in packages/mcp/README.md", () => {
-    expect(existsSync("packages/mcp/README.md")).toBe(true);
-
-    const readme = readFileSync("packages/mcp/README.md", "utf8");
-    expect(readme).toContain("# @mantleio/mantle-mcp");
-    expect(readme).toContain("mantle-mcp");
-  });
 });

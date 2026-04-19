@@ -12,13 +12,9 @@ describe("version consistency", () => {
     const cliJson = JSON.parse(readFileSync("packages/cli/package.json", "utf8")) as {
       version: string;
     };
-    const mcpJson = JSON.parse(readFileSync("packages/mcp/package.json", "utf8")) as {
-      version: string;
-    };
     const docsJson = JSON.parse(readFileSync("docs/package.json", "utf8")) as {
       version: string;
     };
-    const server = readFileSync("packages/mcp/src/server.ts", "utf8");
     const cli = readFileSync("packages/cli/src/index.ts", "utf8");
     const docsIndex = readFileSync("docs/content/index.mdx", "utf8");
 
@@ -27,11 +23,9 @@ describe("version consistency", () => {
     // all workspace packages track the same version
     expect(coreJson.version).toBe(v);
     expect(cliJson.version).toBe(v);
-    expect(mcpJson.version).toBe(v);
     expect(docsJson.version).toBe(v);
 
-    // server and cli read version dynamically from package.json
-    expect(server).toContain("version: pkg.version");
+    // cli reads version dynamically from package.json
     expect(cli).toContain(".version(pkg.version)");
 
     // docs index references the current version
@@ -51,10 +45,6 @@ describe("version consistency", () => {
       {
         manifestPath: "packages/cli/package.json",
         lockPath: "packages/cli"
-      },
-      {
-        manifestPath: "packages/mcp/package.json",
-        lockPath: "packages/mcp"
       }
     ];
 

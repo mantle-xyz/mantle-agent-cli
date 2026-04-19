@@ -2,11 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("readme landing page", () => {
-  it("keeps the root README organized around install, tools, workflow, and safety", () => {
+  it("keeps the root README organized around tools, workflow, and safety", () => {
     const readme = readFileSync("README.md", "utf8");
 
     expect(readme).toContain("# mantle-agent-scaffold");
-    expect(readme).toContain("## Install as MCP Server");
     expect(readme).toContain("## Available Tools");
     expect(readme).toContain("## DeFi Workflow");
     expect(readme).toContain("## Safety Rules");
@@ -30,6 +29,5 @@ describe("readme landing page", () => {
     expect(readme).toContain("https://mantle-xyz.github.io/mantle-agent-scaffold/");
     expect(readme).toContain("packages/core/README.md");
     expect(readme).toContain("packages/cli/README.md");
-    expect(readme).toContain("packages/mcp/README.md");
   });
 });

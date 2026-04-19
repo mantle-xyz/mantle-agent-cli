@@ -7,21 +7,19 @@ This page is for agents running outside this repository context (remote assistan
 Make external agents use both:
 
 - `skills/` for workflow and guardrails
-- `mantle-mcp` for deterministic data and typed interfaces
+- the CLI and core library for deterministic data and typed interfaces
 
 The local `skills/` path is backed by the `mantle-xyz/mantle-skills` Git submodule, and the actual skill folders live under `skills/skills/`.
 
 ## Integration Checklist
 
-1. Build and run MCP server:
+1. Build the CLI:
    - `npm install`
    - `npm run build`
-   - launch `node dist/index.js` with `MANTLE_MCP_TRANSPORT=stdio`
-2. Register MCP server in agent runtime config.
-3. Run `npm run skills:init` if the `skills/` submodule has not been initialized yet.
-4. Give agent read access to repository `skills/` folder.
-5. Require skill-first workflow before tool execution.
-6. Require MCP outputs as final-answer evidence.
+2. Run `npm run skills:init` if the `skills/` submodule has not been initialized yet.
+3. Give agent read access to repository `skills/` folder.
+4. Require skill-first workflow before tool execution.
+5. Require tool outputs as final-answer evidence.
 
 ## Skill-First Protocol (Required)
 
@@ -30,30 +28,13 @@ For every user task:
 1. Select matching skill from `skills/skills/*`.
 2. Read `skills/skills/<skill-name>/SKILL.md`.
 3. Apply its checklist.
-4. Execute relevant MCP tools/resources/prompts.
+4. Execute relevant CLI tools.
 
 If no exact skill matches, external agent should:
 
 1. Choose closest skill for risk controls.
 2. State assumptions.
-3. Continue with MCP-grounded execution.
-
-## MCP Execution Protocol (Required)
-
-External agents should follow this sequence:
-
-1. Discover:
-   - `listTools`
-   - `listResources`
-   - `listPrompts`
-2. Load context:
-   - `readResource` for `mantle://...` URIs
-   - `getPrompt` for workflow templates
-3. Execute:
-   - `callTool` with schema-valid arguments
-4. Report:
-   - cite tool outputs
-   - do not invent addresses, balances, chain status, or token prices
+3. Continue with tool-grounded execution.
 
 ## Recommended Tool Order
 

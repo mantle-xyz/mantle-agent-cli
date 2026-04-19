@@ -5058,7 +5058,7 @@ export async function buildCollectFees(
 }
 
 // =========================================================================
-// Tool definitions (MCP schema)
+// Tool definitions (schema)
 // =========================================================================
 
 export const defiWriteTools: Record<string, Tool> = {

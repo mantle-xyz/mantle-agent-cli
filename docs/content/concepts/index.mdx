@@ -1,10 +1,10 @@
 # Concepts Overview
 
-This section explains the high-level model behind Mantle MCP in v0.1.0.
+This section explains the high-level model behind Mantle Agent Scaffold in v0.1.0.
 
-## What Mantle MCP Is
+## What Mantle Agent Scaffold Is
 
-Mantle MCP is a **tool server** that exposes Mantle L2 read and analysis capabilities to AI agents through the Model Context Protocol (MCP).
+Mantle Agent Scaffold is a **CLI and core library** that exposes Mantle L2 read and analysis capabilities to AI agents.
 
 The system is built around a strict operational boundary:
 
@@ -20,20 +20,20 @@ The current scope emphasizes read-only and analysis workflows. Even when transac
 
 ### 2. Predictable Contracts
 
-Each tool has explicit input schema, stable output shape, and typed error semantics. This is what allows scenario-based E2E testing to catch regressions in tool selection and argument inference.
+Each tool has explicit input schema, stable output shape, and typed error semantics. This allows tests to catch regressions in tool behavior.
 
 ### 3. Agent Usability
 
-Descriptions, schemas, and prompts are written to maximize correct tool routing by LLMs. The current release line strengthens this with scenario-scoped tool exposure and tighter E2E assertions.
+Descriptions, schemas, and tool outputs are written to maximize correct tool routing by LLMs.
 
 ## Key Conceptual Layers
 
-1. **MCP Server Layer**: registry of tools/resources/prompts and request handling.
+1. **CLI Layer**: command entry point for chain reads, DeFi queries, and transaction building.
 2. **Domain Tool Layer**: chain, token, account, DeFi read, indexer, diagnostics.
 3. **Policy Layer**: endpoint allowlists, input validation, read-only SQL restrictions.
-4. **Evaluation Layer**: unit tests plus E2E agent scenarios and release gate logic.
+4. **Evaluation Layer**: unit tests plus integration tests.
 
 ## Recommended Next Read
 
-- [Skills and MCP Usage](/concepts/skills)
+- [Skills Usage](/concepts/skills)
 - [External Agent Integration](/concepts/external-agents)

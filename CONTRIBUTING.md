@@ -39,4 +39,4 @@ Each pull request should include:
 - the verification commands you ran
 - any follow-up work or known limitations
 
-If your change affects the MCP entry point, CLI entry point, or `skills/` usage, update the relevant README or docs page in the same pull request.
+If your change affects the CLI entry point or `skills/` usage, update the relevant README or docs page in the same pull request.

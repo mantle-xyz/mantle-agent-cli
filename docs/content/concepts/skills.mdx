@@ -1,19 +1,18 @@
-# Skills and MCP Usage
+# Skills Usage
 
-This page explains how the local `skills/` library and `mantle-mcp` are intended to work together.
+This page explains how the local `skills/` library is intended to work with the CLI tools.
 The repository keeps the `skills/` submodule path stable, but the actual skill folders come from `mantle-xyz/mantle-skills` under `skills/skills/`.
 
 ## Operating Model
 
 Skills provide workflow and decision guidance.  
-`mantle-mcp` provides deterministic data access and structured outputs.
+The CLI provides deterministic data access and structured outputs.
 
 A reliable agent loop is:
 
 1. Choose the right skill for the task.
-2. Use MCP discovery interfaces (`listTools`, `listResources`, `listPrompts`).
-3. Execute tool calls with validated inputs.
-4. Ground the final answer in tool/resource/prompt outputs.
+2. Execute tool calls with validated inputs.
+3. Ground the final answer in tool outputs.
 
 ## How To Use Skills
 
@@ -25,25 +24,25 @@ Recommended usage flow:
 1. Map user intent to one primary skill (or a small sequence).
 2. Read that skill's `SKILL.md` before tool execution.
 3. Follow its required checklist and safety constraints.
-4. Use the MCP tool/resource/prompt surface to execute the workflow.
+4. Use the CLI tool surface to execute the workflow.
 
 For cross-environment integration guidance, see [External Agent Integration](/concepts/external-agents).
 
 ## Current Skill Catalog
 
-| Skill | Primary Use | Typical MCP Touchpoints |
+| Skill | Primary Use | Typical CLI Touchpoints |
 | --- | --- | --- |
-| `mantle-network-primer` | Explain Mantle architecture and network basics | `mantle_getChainInfo`, `mantle_getChainStatus`, `mantle://docs/network-basics` |
-| `mantle-address-registry-navigator` | Resolve and validate canonical addresses | `mantle_resolveAddress`, `mantle_validateAddress`, `mantle://registry/contracts` |
+| `mantle-network-primer` | Explain Mantle architecture and network basics | `mantle_getChainInfo`, `mantle_getChainStatus` |
+| `mantle-address-registry-navigator` | Resolve and validate canonical addresses | `mantle_resolveAddress`, `mantle_validateAddress` |
 | `mantle-portfolio-analyst` | Wallet balance/allowance portfolio review | `mantle_getBalance`, `mantle_getTokenBalances`, `mantle_getAllowances`, `mantle_getTokenPrices` |
 | `mantle-data-indexer` | Subgraph + SQL data retrieval with quality controls | `mantle_querySubgraph`, `mantle_queryIndexerSql` |
 | `mantle-defi-operator` | DeFi read workflows for swaps, pools, lending | `mantle_getSwapQuote`, `mantle_getPoolLiquidity`, `mantle_getLendingMarkets` |
 | `mantle-readonly-debugger` | Diagnose read-path failures and tool errors | `mantle_checkRpcHealth`, `mantle_probeEndpoint`, error payload codes |
-| `mantle-risk-evaluator` | Risk scoring and execution guardrails | `mantle://docs/risk-checklist`, `mantle_getAllowances`, `mantle_getTokenPrices` |
-| `mantle-tx-simulator` | Pre-signing transaction simulation guidance | prompt/resource guidance + simulation-oriented tool sequencing |
-| `mantle-smart-contract-deployer` | Deployment/verification checklist orchestration | chain/config resources + diagnostics checks before/after deploy |
+| `mantle-risk-evaluator` | Risk scoring and execution guardrails | `mantle_getAllowances`, `mantle_getTokenPrices` |
+| `mantle-tx-simulator` | Pre-signing transaction simulation guidance | simulation-oriented tool sequencing |
+| `mantle-smart-contract-deployer` | Deployment/verification checklist orchestration | diagnostics checks before/after deploy |
 
-## How To Use mantle-mcp in Practice
+## How To Use the CLI in Practice
 
 For most production workflows, start with this sequence:
 

@@ -24,7 +24,7 @@ export interface CapabilityEntry {
   summary: string;
   /** CLI command template (copy-pasteable). */
   cli_command: string;
-  /** Concrete usage example (MCP JSON args, kept for reference). */
+  /** Concrete usage example (JSON args, kept for reference). */
   example: string;
   /** Tools typically called before this one. */
   workflow_before?: string[];

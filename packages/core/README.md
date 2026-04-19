@@ -29,7 +29,6 @@ console.log(result);
 ## Related packages
 
 - [`@mantleio/mantle-cli`](https://www.npmjs.com/package/@mantleio/mantle-cli) — CLI interface built on mantle-core
-- [`@mantleio/mantle-mcp`](https://www.npmjs.com/package/@mantleio/mantle-mcp) — MCP server for AI agents
 
 ## License
 

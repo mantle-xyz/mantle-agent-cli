@@ -1,6 +1,6 @@
-# Mantle MCP Docs Site
+# Mantle Agent Scaffold Docs Site
 
-This directory hosts the Nextra documentation site for Mantle MCP.
+This directory hosts the Nextra documentation site for Mantle Agent Scaffold.
 
 ## Scope
 
