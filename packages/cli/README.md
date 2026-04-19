@@ -48,7 +48,6 @@ mantle-cli --help
 ## Related packages
 
 - [`@mantleio/mantle-core`](https://www.npmjs.com/package/@mantleio/mantle-core) — shared Mantle L2 business logic
-- [`@mantleio/mantle-mcp`](https://www.npmjs.com/package/@mantleio/mantle-mcp) — MCP server for AI agents
 
 ## License
 

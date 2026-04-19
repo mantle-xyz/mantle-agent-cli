@@ -56,7 +56,7 @@ describe("server wiring", () => {
 
   });
 
-  it("indexes tools by MCP tool name for O(1) dispatch", () => {
+  it("indexes tools by tool name for O(1) dispatch", () => {
     const keys = Object.keys(allTools).sort();
     const names = Object.values(allTools).map((tool) => tool.name).sort();
     expect(keys).toEqual(names);

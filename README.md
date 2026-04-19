@@ -1,26 +1,8 @@
 # mantle-agent-scaffold
 
-Mantle MCP server for AI agents. Provides read and write tools for DeFi operations on Mantle L2 — swap, LP, lending (Aave V3), token approvals, and more. All write tools return unsigned transaction payloads; they never hold private keys or broadcast.
+Mantle L2 tooling for AI agents. Provides read and write tools for DeFi operations on Mantle L2 — swap, LP, lending (Aave V3), token approvals, and more. All write tools return unsigned transaction payloads; they never hold private keys or broadcast.
 
 Supported protocols: **Merchant Moe**, **Agni Finance**, **Fluxion**, **Aave V3**.
-
-## Install as MCP Server
-
-Add to your `.mcp.json` or Claude Code `settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "mantle": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@mantleio/mantle-mcp"]
-    }
-  }
-}
-```
-
-Restart your agent after adding the config. `npx` will fetch the package from npm and start the MCP server over stdio.
 
 ## Available Tools
 
@@ -131,7 +113,7 @@ Write tools enforce a whitelist. Only these contracts can be used as `spender` i
 
 ## Skills
 
-Skills provide domain-specific workflows. The local `skills/` checkout is pinned to the external [mantle-xyz/mantle-skills](https://github.com/mantle-xyz/mantle-skills) repository. After installing the MCP server, initialize the skills submodule:
+Skills provide domain-specific workflows. The local `skills/` checkout is pinned to the external [mantle-xyz/mantle-skills](https://github.com/mantle-xyz/mantle-skills) repository. Initialize the skills submodule:
 
 ```bash
 npm run skills:init
@@ -159,7 +141,6 @@ Skill definitions live under `skills/skills/<skill-name>/SKILL.md`. Relevant ski
 npm install
 npm run skills:init
 npm run build
-npm start -w packages/mcp
 ```
 
 Verify:
@@ -178,17 +159,16 @@ npx @mantleio/mantle-cli token prices --tokens USDC,WETH --json
 
 ## Packages
 
-This monorepo produces three independently publishable packages:
+This monorepo produces two independently publishable packages:
 
 | Package | Description |
 |---------|-------------|
 | [`@mantleio/mantle-core`](packages/core/README.md) | Shared business logic — tools, config, and chain interaction |
 | [`@mantleio/mantle-cli`](packages/cli/README.md) | CLI for chain reads, DeFi queries, and transaction building |
-| [`@mantleio/mantle-mcp`](packages/mcp/README.md) | MCP server for AI agents |
 
 ## Documentation
 
 - [Docs site](https://mantle-xyz.github.io/mantle-agent-scaffold/)
 - [External Agent Integration](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/external-agents/)
-- [Skills and MCP Usage](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/skills/)
+- [Skills Usage](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/skills/)
 - [Architecture Model](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/architecture/)

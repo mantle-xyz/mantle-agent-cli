@@ -136,7 +136,7 @@ issue or verifying constants:
 
 ```bash
 npm run debug:cli         # smoke-test the CLI binary path & --json output
-npm run debug:tools       # list all registered MCP tool names
+npm run debug:tools       # list all registered tool names
 npm run debug:pools       # dump on-chain state for the pools in constants.ts
 npm run debug:positions   # enumerate V3 + LB positions for $TEST_PRIVATE_KEY
 npm run setup:links       # (re)create @mantleio/* symlinks in workspace node_modules

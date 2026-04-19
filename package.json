@@ -3,30 +3,23 @@
   "private": true,
   "version": "0.1.18",
   "license": "MIT",
-  "description": "Monorepo for Mantle L2 tooling — core library, CLI, and MCP server",
+  "description": "Monorepo for Mantle L2 tooling — core library and CLI",
   "type": "module",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w packages/core && npm run build -w packages/cli -w packages/mcp",
-    "typecheck": "npm run typecheck -w packages/core && npm run typecheck -w packages/cli -w packages/mcp",
+    "build": "npm run build -w packages/core && npm run build -w packages/cli",
+    "typecheck": "npm run typecheck -w packages/core && npm run typecheck -w packages/cli",
     "pretest": "npm run build",
     "test": "npx vitest run",
-    "test:e2e": "npx vitest run --config vitest.e2e.config.ts",
-    "test:e2e:required": "E2E_REQUIRE_LIVE=true npx vitest run --config vitest.e2e.config.ts",
     "skills:init": "git submodule update --init --recursive skills",
     "skills:sync": "git submodule update --init --remote skills && git add skills",
-    "start": "npm start -w packages/mcp",
     "docs:dev": "npm --prefix docs run dev",
     "docs:build": "HOME=$PWD/docs npm --prefix docs run build"
   },
   "devDependencies": {
-    "@ai-sdk/anthropic": "^3.0.50",
-    "@ai-sdk/openai": "^3.0.37",
-    "@ai-sdk/provider": "^3.0.8",
     "@types/node": "^20.17.58",
-    "ai": "^6.0.105",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   },

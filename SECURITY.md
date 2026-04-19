@@ -23,8 +23,8 @@ When a private reporting path is available, include:
 
 This repository includes:
 
-- the Mantle MCP server
 - the local CLI
+- the core library
 - repository-level skills integration and docs
 
 Security reports should stay focused on this repository and its distributed artifacts.

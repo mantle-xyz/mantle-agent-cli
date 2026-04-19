@@ -4,23 +4,9 @@
 
 At runtime, the architecture is straightforward:
 
-1. MCP server is created via `createServer()`.
-2. Client discovers tools through `listTools`.
-3. Agent runtime maps MCP tool schemas into AI SDK tool definitions.
-4. LLM decides and calls tools.
-5. Tool handlers execute domain logic and return structured results.
-
-## Why InMemoryTransport Matters in E2E
-
-E2E tests use `InMemoryTransport.createLinkedPair()` to eliminate network transport noise while preserving the full MCP request/response boundary.
-
-That gives high signal for:
-
-- tool discovery behavior
-- argument generation quality
-- server handler integration
-
-without introducing unrelated socket/process instability.
+1. CLI entry point parses command arguments.
+2. Core library tools execute domain logic.
+3. Results are returned as structured JSON or formatted output.
 
 ## Domain Coverage in v0.1.0
 

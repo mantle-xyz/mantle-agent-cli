@@ -1,6 +1,6 @@
 # Testing Philosophy
 
-Mantle MCP uses a two-layer validation strategy.
+Mantle Agent Scaffold uses a two-layer validation strategy.
 
 ## Layer 1: Deterministic Unit Tests
 
@@ -13,26 +13,16 @@ Unit tests validate handler behavior directly:
 
 This layer protects correctness of tool logic itself.
 
-## Layer 2: Agent E2E Scenarios
+## Layer 2: Integration Tests
 
-E2E validates end-to-end agent behavior:
+Integration tests validate tool registration and wiring:
 
-- natural language prompt interpretation
-- expected tool call selection
-- argument inference quality
-- output assertions and release gate evaluation
+- all expected tools are registered
+- tool schemas match expected shapes
+- version consistency across packages
 
 This layer protects usability and orchestration behavior.
 
-## v0.1.0 Release Highlights
-
-The v0.1.0 release line focuses on reducing false negatives and model/provider compatibility issues:
-
-- provider-aware stop condition for OpenRouter
-- scenario-scoped tool exposure to reduce wrong-tool drift
-- stronger prompt directive to enforce tool invocation
-- text assertions that consider both final answer and tool result payload
-
 ## Release Mindset
 
-A release is not considered healthy only by unit test pass rate. The project also treats E2E scenario quality and failure type distribution as release criteria.
+A release is considered healthy when unit tests pass and version consistency is maintained across all packages.
