@@ -18,7 +18,7 @@ describe("open source readiness", () => {
     }
   });
 
-  it("includes ci workflow for build, tests, docs, and skills init", () => {
+  it("includes ci workflow for build, tests, and skills init", () => {
     expect(existsSync(".github/workflows/ci.yml")).toBe(true);
 
     const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
@@ -27,6 +27,5 @@ describe("open source readiness", () => {
     expect(workflow).toContain("git submodule update --init --recursive skills");
     expect(workflow).toContain("npm run build");
     expect(workflow).toContain("npm test");
-    expect(workflow).toContain("npm run docs:build");
   });
 });

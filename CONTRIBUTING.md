@@ -16,7 +16,7 @@ The `skills/` checkout is a pinned submodule and is part of the expected reposit
 ## Development Expectations
 
 - Keep changes scoped to the problem you are solving.
-- Update docs when behavior, structure, or onboarding changes.
+- Update the relevant README when behavior, structure, or onboarding changes.
 - Add or update tests for behavior changes.
 - Avoid changing unrelated files in the same pull request.
 
@@ -27,7 +27,6 @@ Run these checks before opening a pull request:
 ```bash
 npm run typecheck
 npm test
-npm run docs:build
 ```
 
 ## Pull Requests

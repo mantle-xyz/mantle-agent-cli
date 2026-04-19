@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("version consistency", () => {
-  it("aligns package, docs, server, and cli versions", () => {
+  it("aligns package and cli versions", () => {
     const rootJson = JSON.parse(readFileSync("package.json", "utf8")) as {
       version: string;
     };
@@ -12,24 +12,16 @@ describe("version consistency", () => {
     const cliJson = JSON.parse(readFileSync("packages/cli/package.json", "utf8")) as {
       version: string;
     };
-    const docsJson = JSON.parse(readFileSync("docs/package.json", "utf8")) as {
-      version: string;
-    };
     const cli = readFileSync("packages/cli/src/index.ts", "utf8");
-    const docsIndex = readFileSync("docs/content/index.mdx", "utf8");
 
     const v = rootJson.version;
 
     // all workspace packages track the same version
     expect(coreJson.version).toBe(v);
     expect(cliJson.version).toBe(v);
-    expect(docsJson.version).toBe(v);
 
     // cli reads version dynamically from package.json
     expect(cli).toContain(".version(pkg.version)");
-
-    // docs index references the current version
-    expect(docsIndex).toContain(`v${v}`);
   });
 
   it("keeps workspace package metadata aligned with package-lock", () => {

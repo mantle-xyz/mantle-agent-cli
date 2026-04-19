@@ -165,10 +165,3 @@ This monorepo produces two independently publishable packages:
 |---------|-------------|
 | [`@mantleio/mantle-core`](packages/core/README.md) | Shared business logic — tools, config, and chain interaction |
 | [`@mantleio/mantle-cli`](packages/cli/README.md) | CLI for chain reads, DeFi queries, and transaction building |
-
-## Documentation
-
-- [Docs site](https://mantle-xyz.github.io/mantle-agent-scaffold/)
-- [External Agent Integration](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/external-agents/)
-- [Skills Usage](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/skills/)
-- [Architecture Model](https://mantle-xyz.github.io/mantle-agent-scaffold/concepts/architecture/)
