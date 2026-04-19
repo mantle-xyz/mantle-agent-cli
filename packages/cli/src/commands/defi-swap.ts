@@ -219,5 +219,11 @@ function formatSwapResult(data: Record<string, unknown>): void {
       extraFields.push({ key: "pool_bin_step", label: "Pool Bin Step", value: poolParams.bin_step });
     }
   }
+  const sp = data.slippage_protection as Record<string, unknown> | undefined;
+  if (sp) {
+    extraFields.push({ key: "sp_input", label: "Min-Out Input", value: sp.input_raw_or_decimal });
+    extraFields.push({ key: "sp_raw", label: "Min-Out Raw", value: sp.resolved_raw });
+    extraFields.push({ key: "sp_decimal", label: "Min-Out Decimal", value: sp.resolved_decimal });
+  }
   formatUnsignedTx(data, { extraFields });
 }

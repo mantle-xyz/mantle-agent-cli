@@ -490,8 +490,10 @@ type SlippageProtectionEcho = {
  * `minimum_out_raw` in the swap-quote output if neither format parses.
  *
  * Rejects decimal precision exceeding token decimals (never silently truncates).
+ *
+ * @internal Exported for unit testing only — not part of the public API.
  */
-function parseAmountOutMin(
+export function parseAmountOutMin(
   input: string,
   tokenOutDecimals: number,
   tokenOutSymbol: string
@@ -500,6 +502,18 @@ function parseAmountOutMin(
 
   if (trimmed.includes(".")) {
     // Decimal format — use parseUnits (BigInt-safe, no float64 rounding)
+
+    // Reject negative values: parseUnits("-0.5", 18) returns a negative BigInt,
+    // which wraps or errors when ABI-encoded as uint256 amountOutMinimum.
+    if (trimmed.startsWith("-")) {
+      throw new MantleMcpError(
+        "INVALID_AMOUNT_FORMAT",
+        `--minimum-out received a negative value '${trimmed}'. Minimum output must be non-negative.`,
+        `Expected: raw integer (e.g., 212195471425023) OR decimal string (e.g., 0.000212195471425023). Copy the 'minimum_out_raw' field from swap-quote output directly.`,
+        { input: trimmed, token_out_decimals: tokenOutDecimals }
+      );
+    }
+
     const dotIdx = trimmed.indexOf(".");
     const fracPart = trimmed.slice(dotIdx + 1);
     if (fracPart.length > tokenOutDecimals) {
@@ -526,7 +540,8 @@ function parseAmountOutMin(
       echo: {
         input_raw_or_decimal: trimmed,
         resolved_raw: raw.toString(),
-        resolved_decimal: trimmed,
+        // Use formatUnits for consistency with the raw-integer path (strips trailing zeros)
+        resolved_decimal: formatUnits(raw, tokenOutDecimals),
         token_out_decimals: tokenOutDecimals
       }
     };
@@ -542,23 +557,15 @@ function parseAmountOutMin(
     );
   }
 
-  let raw: bigint;
-  try {
-    raw = BigInt(trimmed);
-  } catch {
-    throw new MantleMcpError(
-      "INVALID_AMOUNT_FORMAT",
-      `--minimum-out received '${trimmed}' which could not be converted to a BigInt.`,
-      `Expected: raw integer (e.g., 212195471425023) OR decimal string (e.g., 0.000212195471425023). Copy the 'minimum_out_raw' field from swap-quote output directly.`,
-      { input: trimmed, token_out_decimals: tokenOutDecimals }
-    );
-  }
+  // Safe: ^\d+$ regex above guarantees BigInt() cannot throw here
+  const raw = BigInt(trimmed);
 
   return {
     raw,
     echo: {
       input_raw_or_decimal: trimmed,
-      resolved_raw: trimmed,
+      // Use raw.toString() to normalize (e.g. "007" → "7" in the echo)
+      resolved_raw: raw.toString(),
       resolved_decimal: formatUnits(raw, tokenOutDecimals),
       token_out_decimals: tokenOutDecimals
     }
@@ -1889,6 +1896,17 @@ export async function buildSwap(
   const allowZeroMin = args.allow_zero_min === true || args.allow_zero_min === "true";
   let amountOutMin: bigint;
   let slippageProtectionEcho: SlippageProtectionEcho | undefined;
+
+  // Whitespace-only is a malformed input (not a missing one) → INVALID_AMOUNT_FORMAT.
+  if (typeof args.amount_out_min === "string" && args.amount_out_min !== "0" && args.amount_out_min.trim().length === 0) {
+    throw new MantleMcpError(
+      "INVALID_AMOUNT_FORMAT",
+      "--minimum-out was provided but contains only whitespace.",
+      "Expected: raw integer (e.g., 212195471425023) OR decimal string (e.g., 0.000212195471425023). Copy the 'minimum_out_raw' field from swap-quote output directly.",
+      { input: args.amount_out_min }
+    );
+  }
+
   if (typeof args.amount_out_min === "string" && args.amount_out_min !== "0" && args.amount_out_min.trim().length > 0) {
     // Supports both raw integer (e.g. "212195471425023") and decimal string
     // (e.g. "0.000212195471425023") so the Agent can copy either field from
@@ -1896,8 +1914,26 @@ export async function buildSwap(
     const parsed = parseAmountOutMin(args.amount_out_min, tokenOut.decimals, tokenOut.symbol);
     amountOutMin = parsed.raw;
     slippageProtectionEcho = parsed.echo;
+    // Guard: decimal-form zero (e.g. "0.0") passes the literal "0" pre-check above
+    // but resolves to 0n — catch it here to keep slippage protection guarantees intact.
+    if (amountOutMin === 0n && !allowZeroMin) {
+      throw new MantleMcpError(
+        "INVALID_AMOUNT_FORMAT",
+        `--minimum-out '${args.amount_out_min}' resolved to zero, which provides no slippage protection.`,
+        "Provide a non-zero minimum output amount. Copy 'minimum_out_raw' from swap-quote output, or set allow_zero_min=true only if you understand the risks.",
+        { input: args.amount_out_min, token_out: tokenOut.symbol }
+      );
+    }
   } else if (allowZeroMin) {
     amountOutMin = 0n;
+    // Populate echo even for the zero-min path so every swap response
+    // has a consistent, auditable slippage_protection record.
+    slippageProtectionEcho = {
+      input_raw_or_decimal: typeof args.amount_out_min === "string" ? args.amount_out_min.trim() : "0",
+      resolved_raw: "0",
+      resolved_decimal: "0",
+      token_out_decimals: tokenOut.decimals
+    };
   } else {
     throw new MantleMcpError(
       "MISSING_SLIPPAGE_PROTECTION",
@@ -5001,7 +5037,7 @@ export const defiWriteTools: Record<string, Tool> = {
         },
         amount_out_min: {
           type: "string",
-          description: "REQUIRED: Minimum output in raw units (from mantle_getSwapQuote minimum_out_raw). Protects against slippage and sandwich attacks."
+          description: "REQUIRED: Minimum acceptable output amount. Accepts: (1) raw integer units — copy 'minimum_out_raw' from mantle_getSwapQuote verbatim (e.g. '212195471425023'), OR (2) decimal string — e.g. '0.000212195471425023'. Raw integer is preferred (no conversion needed). Protects against slippage and sandwich attacks. The response includes a 'slippage_protection' echo confirming the resolved value."
         },
         allow_zero_min: {
           type: "boolean",

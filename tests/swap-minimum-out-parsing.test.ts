@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { buildSwap } from "@mantleio/mantle-core/tools/defi-write.js";
+import { buildSwap, parseAmountOutMin } from "@mantleio/mantle-core/tools/defi-write.js";
 import { MantleMcpError } from "@mantleio/mantle-core/errors.js";
 
 // ---------------------------------------------------------------------------
@@ -189,13 +189,12 @@ describe("Case 5: bad input raises INVALID_AMOUNT_FORMAT with hint", () => {
     expect(formatError!.code).toBe("INVALID_AMOUNT_FORMAT");
   });
 
-  it("raises INVALID_AMOUNT_FORMAT for empty-after-trim", async () => {
-    // This won't reach parseAmountOutMin because the guard above checks for
-    // trimmed.length === 0 and falls through to the missing-slippage branch.
-    // We still verify it doesn't raise INVALID_AMOUNT_FORMAT (it would raise
-    // MISSING_SLIPPAGE_PROTECTION instead).
+  it("raises INVALID_AMOUNT_FORMAT for whitespace-only input", async () => {
+    // Whitespace-only is now correctly classified as INVALID_AMOUNT_FORMAT
+    // (field was provided but malformed) rather than MISSING_SLIPPAGE_PROTECTION.
     const { formatError } = await tryParsing("   ");
-    expect(formatError).toBeNull(); // different error code, not our concern here
+    expect(formatError).not.toBeNull();
+    expect(formatError!.code).toBe("INVALID_AMOUNT_FORMAT");
   });
 });
 
@@ -248,5 +247,168 @@ describe("slippage_protection echo field (unit-level via parseAmountOutMin)", ()
     expect(slippageProtection.resolved_raw).toBe("212195471425023");
     expect(typeof slippageProtection.resolved_decimal).toBe("string");
     expect(slippageProtection.token_out_decimals).toBe(18);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Additional: negative decimal inputs are rejected (regression guard for
+// Finding #2 — negative BigInt passed to uint256 router calldata)
+// ---------------------------------------------------------------------------
+
+describe("Negative input guard", () => {
+  it("rejects negative decimal '-0.5' with INVALID_AMOUNT_FORMAT", async () => {
+    const { formatError } = await tryParsing("-0.5");
+    expect(formatError).not.toBeNull();
+    expect(formatError!.code).toBe("INVALID_AMOUNT_FORMAT");
+    expect(formatError!.message).toMatch(/negative/i);
+  });
+
+  it("rejects negative raw integer '-1' with INVALID_AMOUNT_FORMAT", async () => {
+    // The ^\d+$ guard catches this — '-' is not a digit.
+    const { formatError } = await tryParsing("-1");
+    expect(formatError).not.toBeNull();
+    expect(formatError!.code).toBe("INVALID_AMOUNT_FORMAT");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Additional: decimal-form zero resolves to 0n and must be rejected
+// (regression guard for Finding #1 — "0.0" bypassed literal "0" pre-check)
+// ---------------------------------------------------------------------------
+
+describe("Decimal-zero guard", () => {
+  it("rejects '0.0' decimal zero with INVALID_AMOUNT_FORMAT (resolves to 0n)", async () => {
+    const { formatError } = await tryParsing("0.0");
+    expect(formatError).not.toBeNull();
+    expect(formatError!.code).toBe("INVALID_AMOUNT_FORMAT");
+    expect(formatError!.message).toMatch(/zero/i);
+  });
+
+  it("rejects '0.000' decimal zero for USDC (6 decimals)", async () => {
+    const { formatError } = await tryParsing("0.000000", "USDC");
+    expect(formatError).not.toBeNull();
+    expect(formatError!.code).toBe("INVALID_AMOUNT_FORMAT");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Direct unit tests for parseAmountOutMin (exported @internal).
+// These test the BigInt math directly without requiring pool resolution.
+// They replace the vacuous echo tests that relied on buildSwap fully succeeding
+// (which never happens in a unit-test environment without a mock pool).
+// ---------------------------------------------------------------------------
+
+describe("parseAmountOutMin direct unit tests (BigInt math, echo fields)", () => {
+  it("decimal '0.000212195471425023' with 18 decimals → raw 212195471425023n", () => {
+    const { raw, echo } = parseAmountOutMin("0.000212195471425023", 18, "WMNT");
+    expect(raw).toBe(212195471425023n);
+    expect(echo.resolved_raw).toBe("212195471425023");
+    expect(echo.input_raw_or_decimal).toBe("0.000212195471425023");
+    expect(echo.token_out_decimals).toBe(18);
+    // resolved_decimal is the canonical formatUnits form
+    expect(echo.resolved_decimal).toBe("0.000212195471425023");
+  });
+
+  it("raw integer '212195471425023' with 18 decimals → raw 212195471425023n", () => {
+    const { raw, echo } = parseAmountOutMin("212195471425023", 18, "WMNT");
+    expect(raw).toBe(212195471425023n);
+    expect(echo.resolved_raw).toBe("212195471425023");
+    expect(echo.input_raw_or_decimal).toBe("212195471425023");
+    expect(echo.token_out_decimals).toBe(18);
+    expect(typeof echo.resolved_decimal).toBe("string");
+  });
+
+  it("decimal '1.5' with 6 decimals (USDC) → raw 1500000n", () => {
+    const { raw, echo } = parseAmountOutMin("1.5", 6, "USDC");
+    expect(raw).toBe(1_500_000n);
+    expect(echo.resolved_raw).toBe("1500000");
+    expect(echo.token_out_decimals).toBe(6);
+  });
+
+  it("leading-zero integer '007' normalises to resolved_raw '7'", () => {
+    const { raw, echo } = parseAmountOutMin("007", 18, "WMNT");
+    expect(raw).toBe(7n);
+    // resolved_raw must be normalised (raw.toString()), not the original "007"
+    expect(echo.resolved_raw).toBe("7");
+  });
+
+  it("both paths produce consistent resolved_decimal via formatUnits", () => {
+    // Decimal path: input "0.100000" with 6 decimals → parseUnits → 100000n
+    // resolved_decimal should be "0.1" (formatUnits canonical form, not "0.100000")
+    const { echo } = parseAmountOutMin("0.100000", 6, "USDC");
+    expect(echo.resolved_raw).toBe("100000");
+    expect(echo.resolved_decimal).toBe("0.1"); // formatUnits canonical form
+  });
+
+  it("throws INVALID_AMOUNT_FORMAT for negative decimal '-0.5'", () => {
+    expect(() => parseAmountOutMin("-0.5", 18, "WMNT")).toThrow(MantleMcpError);
+    try {
+      parseAmountOutMin("-0.5", 18, "WMNT");
+    } catch (err) {
+      expect(err).toBeInstanceOf(MantleMcpError);
+      expect((err as MantleMcpError).code).toBe("INVALID_AMOUNT_FORMAT");
+      expect((err as MantleMcpError).message).toMatch(/negative/i);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Core safety invariant: absent amount_out_min must throw MISSING_SLIPPAGE_PROTECTION
+// (Finding D — the fundamental slippage protection guarantee was untested)
+// ---------------------------------------------------------------------------
+
+describe("MISSING_SLIPPAGE_PROTECTION safety invariant", () => {
+  it("throws MISSING_SLIPPAGE_PROTECTION when amount_out_min is omitted", async () => {
+    let caughtCode: string | null = null;
+
+    try {
+      await buildSwap(
+        {
+          provider: "agni",
+          token_in: "USDC",
+          token_out: "WMNT",
+          amount_in: "0.5",
+          // amount_out_min intentionally omitted
+          recipient: RECIPIENT,
+          owner: OWNER,
+          network: "mainnet"
+        },
+        makeMinimalDeps()
+      );
+    } catch (err) {
+      if (err instanceof MantleMcpError) {
+        caughtCode = err.code;
+      }
+    }
+
+    expect(caughtCode).toBe("MISSING_SLIPPAGE_PROTECTION");
+  });
+
+  it("does NOT throw MISSING_SLIPPAGE_PROTECTION when allow_zero_min=true", async () => {
+    let missingSlippageThrown = false;
+
+    try {
+      await buildSwap(
+        {
+          provider: "agni",
+          token_in: "USDC",
+          token_out: "WMNT",
+          amount_in: "0.5",
+          // amount_out_min omitted, but allow_zero_min=true
+          allow_zero_min: true,
+          recipient: RECIPIENT,
+          owner: OWNER,
+          network: "mainnet"
+        },
+        makeMinimalDeps()
+      );
+    } catch (err) {
+      if (err instanceof MantleMcpError && err.code === "MISSING_SLIPPAGE_PROTECTION") {
+        missingSlippageThrown = true;
+      }
+      // Other errors (NO_ROUTE_FOUND etc.) are expected in unit-test context
+    }
+
+    expect(missingSlippageThrown).toBe(false);
   });
 });
