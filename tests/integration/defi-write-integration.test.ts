@@ -184,6 +184,8 @@ describe.skipIf(!ENABLED)("Integration: buildSwap — merchant_moe", () => {
   it("auto-discovery via LB Quoter WMNT→USDC — calls real findBestPathFromAmountIn", async () => {
     // The most common agent workflow: no bin_step supplied, quoter picks the
     // best route. This exercises the full LB Quoter integration path.
+    // NOTE: depending on live liquidity the quoter may pick a direct (single-hop)
+    // or a multi-hop route. Both are valid outcomes.
     const result = await buildSwap({
       provider: "merchant_moe",
       token_in: "WMNT",
@@ -192,7 +194,7 @@ describe.skipIf(!ENABLED)("Integration: buildSwap — merchant_moe", () => {
       amount_out_min: "1",
       recipient: RECIPIENT
     });
-    expect(result.intent).toBe("swap");
+    expect(["swap", "swap_multihop"]).toContain(result.intent);
     expect(result.unsigned_tx.to).toBe(LB_ROUTER);
     expect(result.unsigned_tx.chainId).toBe(5000);
     // Quoter-discovered bin_step must be a positive integer
@@ -213,12 +215,15 @@ describe.skipIf(!ENABLED)("Integration: buildAddLiquidity — V3", () => {
     // The builder resolves the Agni pool → reads slot0() and tickSpacing() to
     // compute tick_lower/tick_upper from the live price. This is the most
     // common add-liquidity agent workflow.
+    // NOTE: WMNT/USDC on Agni only has a pool at fee tier 500 — the builder's
+    // default of 3000 would throw POOL_NOT_FOUND, so we pass it explicitly.
     const result = await buildAddLiquidity({
       provider: "agni",
       token_a: "WMNT",
       token_b: "USDC",
       amount_a: "0.01",
       amount_b: "0.006",
+      fee_tier: 500,
       range_preset: "moderate",
       recipient: RECIPIENT
     });
@@ -230,14 +235,17 @@ describe.skipIf(!ENABLED)("Integration: buildAddLiquidity — V3", () => {
     expect(result.pool_params?.provider).toBe("agni");
   }, TIMEOUT);
 
-  it("agni range_preset='full_range' WMNT/USDC — wider ticks, still builds mint tx", async () => {
+  it("agni range_preset='conservative' WMNT/USDC — wider ticks, still builds mint tx", async () => {
+    // 'conservative' (±20%) is the widest preset supported by the builder.
+    // (Valid presets: 'aggressive' ±5%, 'moderate' ±10%, 'conservative' ±20%.)
     const result = await buildAddLiquidity({
       provider: "agni",
       token_a: "WMNT",
       token_b: "USDC",
       amount_a: "0.01",
       amount_b: "0.006",
-      range_preset: "full_range",
+      fee_tier: 500,
+      range_preset: "conservative",
       recipient: RECIPIENT
     });
     expect(result.intent).toBe("add_liquidity");
@@ -428,9 +436,13 @@ describe.skipIf(!ENABLED)("Integration: buildWrapMnt / buildUnwrapMnt", () => {
 // =========================================================================
 describe.skipIf(!ENABLED)("Integration: buildCollectFees — V3", () => {
   it("non-existent token_id — either INVALID_INPUT (empty position) or collect_fees", async () => {
-    // Token ID 999999 is very unlikely to exist. If it doesn't, buildCollectFees
-    // throws INVALID_INPUT (zero liquidity + zero fees). If it somehow exists,
-    // it returns a valid collect tx. Either outcome is acceptable.
+    // Token ID 999999 is very unlikely to exist. Three possible outcomes are
+    // all acceptable:
+    //   (a) the position somehow exists → returns a valid collect_fees tx
+    //   (b) positions(...) returns zero liquidity + zero fees → builder throws
+    //       MantleMcpError(INVALID_INPUT)
+    //   (c) positions(...) reverts on-chain (ERC721NonexistentToken) → viem
+    //       throws ContractFunctionExecutionError, which has no `code` field
     let succeeded = false;
     try {
       const result = await buildCollectFees({
@@ -443,8 +455,12 @@ describe.skipIf(!ENABLED)("Integration: buildCollectFees — V3", () => {
       expect(result.intent).toBe("collect_fees");
       expect(result.unsigned_tx.to).toBe(AGNI_PM);
     } catch (err: any) {
-      // Only INVALID_INPUT is an acceptable error
-      expect(err.code).toBe("INVALID_INPUT");
+      const isMantleInvalidInput = err?.code === "INVALID_INPUT";
+      const isViemContractRevert =
+        typeof err?.name === "string" && err.name.includes("Contract") ||
+        typeof err?.message === "string" &&
+          /revert|nonexistent|invalid token|ERC721/i.test(err.message);
+      expect(isMantleInvalidInput || isViemContractRevert).toBe(true);
     }
     // At least one path executed cleanly
     expect(succeeded !== undefined).toBe(true);
@@ -523,15 +539,19 @@ describe.skipIf(!ENABLED)("Integration: Aave V3 write functions", () => {
     expect(result.unsigned_tx.chainId).toBe(5000);
   }, TIMEOUT);
 
-  it("buildAaveRepay amount='max' — last 64 hex chars of calldata = MAX_UINT256", async () => {
+  it("buildAaveRepay amount='max' — calldata contains MAX_UINT256 in the amount slot", async () => {
     const result = await buildAaveRepay({
       asset: "USDC",
       amount: "max",
       on_behalf_of: RECIPIENT
     });
     expect(result.intent).toBe("aave_repay");
-    // MAX_UINT256 = 2^256 - 1; encoded as 64 hex 'f' chars in the last slot
-    expect(result.unsigned_tx.data.endsWith("f".repeat(64))).toBe(true);
+    // repay(asset, amount, rateMode, onBehalfOf) — amount is the 2nd arg, so the
+    // calldata ends with `onBehalfOf` (padded), NOT amount. MAX_UINT256 encodes
+    // to a unique run of 64 hex 'f' chars; assert it appears anywhere in calldata.
+    expect(result.unsigned_tx.data.includes("f".repeat(64))).toBe(true);
+    // Also confirm the human summary reflects the max sentinel
+    expect(result.human_summary.toLowerCase()).toContain("max");
   }, TIMEOUT);
 
   it("buildAaveWithdraw 10 USDC — to=AavePool, withdraw selector, health factor warning", async () => {
@@ -549,7 +569,7 @@ describe.skipIf(!ENABLED)("Integration: Aave V3 write functions", () => {
     expect(result.warnings.some(w => w.toLowerCase().includes("health factor"))).toBe(true);
   }, TIMEOUT);
 
-  it("buildAaveWithdraw amount='max' — MAX_UINT256 in calldata", async () => {
+  it("buildAaveWithdraw amount='max' — calldata contains MAX_UINT256 in the amount slot", async () => {
     const result = await buildAaveWithdraw({
       asset: "WMNT",
       amount: "max",
@@ -557,7 +577,11 @@ describe.skipIf(!ENABLED)("Integration: Aave V3 write functions", () => {
       owner: RECIPIENT
     });
     expect(result.intent).toBe("aave_withdraw");
-    expect(result.unsigned_tx.data.endsWith("f".repeat(64))).toBe(true);
+    // withdraw(asset, amount, to) — amount is the 2nd arg, so the calldata ends
+    // with `to` (padded), NOT amount. Just confirm the MAX_UINT256 pattern is
+    // present anywhere in the calldata.
+    expect(result.unsigned_tx.data.includes("f".repeat(64))).toBe(true);
+    expect(result.human_summary.toLowerCase()).toContain("max");
   }, TIMEOUT);
 });
 

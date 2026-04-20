@@ -119,12 +119,14 @@ describe("buildAaveSupply", () => {
     expect(result.warnings.some(w => w.includes("ISOLATION MODE"))).toBe(false);
   });
 
-  it("accepts 'recipient' as alias for 'on_behalf_of'", async () => {
+  it("accepts 'recipient' as alias for 'on_behalf_of' — builds same tx to AavePool", async () => {
     const result = await buildAaveSupply(
       { asset: "USDC", amount: "50", recipient: FAKE_RECIPIENT },
       { ...baseDeps, getClient: noopClient as any }
     );
     expect(result.intent).toBe("aave_supply");
+    expect(result.unsigned_tx.to).toBe(AAVE_POOL);
+    expect(result.unsigned_tx.data.startsWith(SELECTOR_SUPPLY)).toBe(true);
   });
 
   it("unsupported asset → UNSUPPORTED_AAVE_ASSET", async () => {
@@ -145,13 +147,13 @@ describe("buildAaveSupply", () => {
     ).rejects.toMatchObject({ code: "UNSUPPORTED_AAVE_ASSET" });
   });
 
-  it("supply 0 amount → error", async () => {
+  it("supply 0 amount → INVALID_INPUT", async () => {
     await expect(
       buildAaveSupply(
         { asset: "USDC", amount: "0", on_behalf_of: FAKE_RECIPIENT },
         { ...baseDeps, getClient: noopClient as any }
       )
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 
   it("aave_reserve fields populated — aToken, variableDebtToken, underlying", async () => {
@@ -352,20 +354,22 @@ describe("buildAaveWithdraw", () => {
     expect(data.slice(74, 138)).toBe("f".repeat(64));
   });
 
-  it("accepts 'recipient' as alias for 'to'", async () => {
+  it("accepts 'recipient' as alias for 'to' — target address is AavePool", async () => {
     const result = await buildAaveWithdraw(
       { asset: "USDC", amount: "10", recipient: FAKE_RECIPIENT, owner: FAKE_WALLET },
       { ...baseDeps, getClient: noopClient as any }
     );
-    expect(result.intent).toBe("aave_withdraw");
+    expect(result.unsigned_tx.to).toBe(AAVE_POOL);
+    expect(result.unsigned_tx.data.startsWith(SELECTOR_WITHDRAW)).toBe(true);
   });
 
-  it("accepts 'sender' as alias for 'owner'", async () => {
+  it("accepts 'sender' as alias for 'owner' — builds withdraw tx correctly", async () => {
     const result = await buildAaveWithdraw(
       { asset: "USDC", amount: "10", to: FAKE_RECIPIENT, sender: FAKE_WALLET },
       { ...baseDeps, getClient: noopClient as any }
     );
-    expect(result.intent).toBe("aave_withdraw");
+    expect(result.unsigned_tx.to).toBe(AAVE_POOL);
+    expect(result.unsigned_tx.data.startsWith(SELECTOR_WITHDRAW)).toBe(true);
   });
 
   it("missing owner/sender → INVALID_ADDRESS", async () => {

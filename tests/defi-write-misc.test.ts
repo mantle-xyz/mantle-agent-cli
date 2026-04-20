@@ -88,24 +88,30 @@ describe("buildWrapMnt", () => {
     // chainId and to address are correctly overridden.
   });
 
-  it("accepts 'owner' alias instead of 'sender'", async () => {
-    const result = await buildWrapMnt(
+  it("accepts 'owner' alias instead of 'sender' — same calldata as using 'sender'", async () => {
+    const resultOwner = await buildWrapMnt(
       { amount: "1", owner: FAKE_WALLET },
       baseDeps
     );
-    expect(result.unsigned_tx.data).toBe(SELECTOR_DEPOSIT);
+    const resultSender = await buildWrapMnt(
+      { amount: "1", sender: FAKE_WALLET },
+      baseDeps
+    );
+    // Both aliases produce identical transactions
+    expect(resultOwner.unsigned_tx.data).toBe(resultSender.unsigned_tx.data);
+    expect(resultOwner.unsigned_tx.value).toBe(resultSender.unsigned_tx.value);
   });
 
-  it("rejects zero amount", async () => {
+  it("rejects zero amount → INVALID_INPUT", async () => {
     await expect(
       buildWrapMnt({ amount: "0", sender: FAKE_WALLET }, baseDeps)
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 
-  it("rejects negative amount", async () => {
+  it("rejects negative amount → INVALID_INPUT", async () => {
     await expect(
       buildWrapMnt({ amount: "-1", sender: FAKE_WALLET }, baseDeps)
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 
   it("rejects missing sender/owner", async () => {
@@ -167,18 +173,20 @@ describe("buildUnwrapMnt", () => {
     ).rejects.toMatchObject({ code: "INVALID_ADDRESS" });
   });
 
-  it("rejects zero amount", async () => {
+  it("rejects zero amount → INVALID_INPUT", async () => {
     await expect(
       buildUnwrapMnt({ amount: "0", sender: FAKE_WALLET }, baseDeps)
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 
-  it("built_at_utc matches now()", async () => {
+  it("deps.now() injection — built_at_utc reflects injected timestamp, not real clock", async () => {
     const result = await buildUnwrapMnt(
       { amount: "1", sender: FAKE_WALLET },
       baseDeps
     );
+    // If now() were not injected, built_at_utc would be the real current date != NOW
     expect(result.built_at_utc).toBe(NOW);
+    expect(result.unsigned_tx.data.startsWith(SELECTOR_WITHDRAW)).toBe(true);
   });
 });
 
@@ -283,12 +291,18 @@ describe("buildCollectFees", () => {
     ).rejects.toMatchObject({ code: "INVALID_ADDRESS" });
   });
 
-  it("'sender' accepted as alias for 'owner'", async () => {
-    const result = await buildCollectFees(
+  it("'sender' accepted as alias for 'owner' — builds identical multicall calldata", async () => {
+    const resultOwner = await buildCollectFees(
+      { provider: "agni", token_id: "12345", recipient: FAKE_RECIPIENT, owner: FAKE_WALLET },
+      { ...baseDeps, getClient: makeClient(100n, 50n, 50n) as any }
+    );
+    const resultSender = await buildCollectFees(
       { provider: "agni", token_id: "12345", recipient: FAKE_RECIPIENT, sender: FAKE_WALLET },
       { ...baseDeps, getClient: makeClient(100n, 50n, 50n) as any }
     );
-    expect(result.intent).toBe("collect_fees");
+    // Both aliases must produce the same collect calldata
+    expect(resultSender.unsigned_tx.data).toBe(resultOwner.unsigned_tx.data);
+    expect(resultSender.unsigned_tx.to).toBe(AGNI_POSITION_MANAGER);
   });
 });
 
