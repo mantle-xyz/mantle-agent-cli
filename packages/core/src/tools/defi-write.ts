@@ -1913,8 +1913,10 @@ async function discoverMoeRouteViaQuoter(
       binSteps: readonly bigint[];
       versions: readonly bigint[];
       amounts: readonly bigint[];
-    };
+    } | null;
 
+    // Quoter may return null when no route exists for a path — skip gracefully.
+    if (!quote) continue;
     const amounts = quote.amounts;
     if (!amounts || amounts.length === 0) continue;
     const amountOut = amounts[amounts.length - 1];
@@ -2873,11 +2875,12 @@ export async function buildAddLiquidity(
     );
   } else {
     // --- Standard token amount mode ---
-    // Validate that at least one amount mode is provided
-    if (
-      (args.amount_a == null || args.amount_a === "") &&
-      (args.amount_b == null || args.amount_b === "")
-    ) {
+    // One-sided deposits (amount_a=0 OR amount_b=0) are a first-class use case:
+    // the corresponding distribution array must then sum to 0. We allow zero
+    // for each side individually and only require that at least one is > 0.
+    const hasA = args.amount_a != null && args.amount_a !== "";
+    const hasB = args.amount_b != null && args.amount_b !== "";
+    if (!hasA && !hasB) {
       throw new MantleMcpError(
         "INVALID_INPUT",
         "Either (amount_a + amount_b) or amount_usd is required.",
@@ -2885,16 +2888,44 @@ export async function buildAddLiquidity(
         { amount_a: args.amount_a ?? null, amount_b: args.amount_b ?? null, amount_usd: args.amount_usd ?? null }
       );
     }
-    amountARaw = requirePositiveAmount(
-      args.amount_a,
-      "amount_a",
-      tokenA.decimals
-    );
-    amountBRaw = requirePositiveAmount(
-      args.amount_b,
-      "amount_b",
-      tokenB.decimals
-    );
+
+    // Parse each amount: positive required if provided and non-empty, 0 if absent/empty.
+    const parseAmountAllowZero = (val: unknown, field: string, dec: number): bigint => {
+      if (val == null || val === "") return 0n;
+      const str = requireString(val, field);
+      let raw: bigint;
+      try {
+        raw = parseUnits(str, dec);
+      } catch {
+        throw new MantleMcpError(
+          "INVALID_INPUT",
+          `${field} is not a valid decimal number.`,
+          "Provide a non-negative decimal amount (e.g. '0' or '1.5'). Use 0 for one-sided deposits.",
+          { field, value: str }
+        );
+      }
+      if (raw < 0n) {
+        throw new MantleMcpError(
+          "INVALID_INPUT",
+          `${field} must be non-negative.`,
+          "Provide a non-negative amount. Use 0 for one-sided deposits.",
+          { field, value: str }
+        );
+      }
+      return raw;
+    };
+
+    amountARaw = parseAmountAllowZero(args.amount_a, "amount_a", tokenA.decimals);
+    amountBRaw = parseAmountAllowZero(args.amount_b, "amount_b", tokenB.decimals);
+
+    if (amountARaw === 0n && amountBRaw === 0n) {
+      throw new MantleMcpError(
+        "INVALID_INPUT",
+        "At least one of amount_a or amount_b must be greater than zero.",
+        "For a one-sided deposit supply the non-zero side; set the other to 0 and provide the corresponding distribution arrays.",
+        { amount_a: String(amountARaw), amount_b: String(amountBRaw) }
+      );
+    }
   }
 
   const amountADecimal = formatUnits(amountARaw, tokenA.decimals);
@@ -4367,26 +4398,29 @@ export async function buildAaveBorrow(
       const isolationReserves = AAVE_V3_MANTLE_RESERVES.filter(r => r.isolationMode);
       const nonIsolationReserves = AAVE_V3_MANTLE_RESERVES.filter(r => !r.isolationMode);
 
-      // Batch-read aToken balances for all reserves
+      // Batch-read aToken balances for all reserves.
+      // Individual calls are NOT silently swallowed here: if the RPC is
+      // unavailable, the Promise.all rejects and the outer try-catch adds the
+      // ISOLATION MODE WARNING instead of silently treating every balance as 0.
       const [isoBalances, nonIsoBalances] = await Promise.all([
         Promise.all(
           isolationReserves.map(r =>
-            (client.readContract({
+            client.readContract({
               address: r.aToken as `0x${string}`,
               abi: ERC20_ABI,
               functionName: "balanceOf",
               args: [onBehalfOf as `0x${string}`]
-            }) as Promise<bigint>).catch(() => 0n)
+            }) as Promise<bigint>
           )
         ),
         Promise.all(
           nonIsolationReserves.map(r =>
-            (client.readContract({
+            client.readContract({
               address: r.aToken as `0x${string}`,
               abi: ERC20_ABI,
               functionName: "balanceOf",
               args: [onBehalfOf as `0x${string}`]
-            }) as Promise<bigint>).catch(() => 0n)
+            }) as Promise<bigint>
           )
         )
       ]);
@@ -5171,7 +5205,7 @@ export const defiWriteTools: Record<string, Tool> = {
   mantle_buildSwap: {
     name: "mantle_buildSwap",
     description:
-      "Build an unsigned swap transaction on a whitelisted DEX. Pool parameters (bin_step, fee_tier) are auto-discovered on-chain for the best liquidity pool.\n\nWORKFLOW:\n1. Call mantle_getSwapQuote → returns router_address, provider, and resolved_pool_params\n2. Call mantle_buildApprove: token=token_in, spender=router_address from step 1, amount=amount_in, owner=wallet_address. IMPORTANT: spender is the ROUTER address (e.g. 0x319B69… for Agni), NOT the token address.\n3. Sign and broadcast the approve unsigned_tx. Wait for confirmation.\n4. Call mantle_buildSwap with: provider from quote, amount_out_min from quote's minimum_out_raw, owner=wallet_address (triggers blocking allowance check), and quote_fee_tier/quote_provider for cross-validation\n5. Sign and broadcast the swap unsigned_tx\n\nIf owner is passed and allowance is insufficient, buildSwap will REJECT with INSUFFICIENT_ALLOWANCE (not just warn). The error includes the correct router_address to approve.\n\nThe response includes pool_params.router_address — this is the spender for approve.\n\nExamples:\n- Swap 100 USDC for USDT0 on Merchant Moe: provider='merchant_moe', token_in='USDC', token_out='USDT0', amount_in='100', recipient='0x...', owner='0x...'\n- Swap 10 WMNT for USDC on Agni: provider='agni', token_in='WMNT', token_out='USDC', amount_in='10', recipient='0x...', owner='0x...'",
+      "Build an unsigned swap transaction on a whitelisted DEX. Pool parameters (bin_step, fee_tier) are auto-discovered on-chain for the best liquidity pool.\n\nWORKFLOW:\n1. Call mantle_getSwapQuote → returns router_address, provider, and resolved_pool_params\n2. Call mantle_buildApprove: token=token_in, spender=router_address from step 1, amount=amount_in, owner=wallet_address. IMPORTANT: spender is the ROUTER address (e.g. 0x319B69888b0d11cEC22caA5034e25FfFBDc88421 for Agni), NOT the token address.\n3. Sign and broadcast the approve unsigned_tx. Wait for confirmation.\n4. Call mantle_buildSwap with: provider from quote, amount_out_min from quote's minimum_out_raw, owner=wallet_address (triggers blocking allowance check), and quote_fee_tier/quote_provider for cross-validation\n5. Sign and broadcast the swap unsigned_tx\n\nIf owner is passed and allowance is insufficient, buildSwap will REJECT with INSUFFICIENT_ALLOWANCE (not just warn). The error includes the correct router_address to approve.\n\nThe response includes pool_params.router_address — this is the spender for approve.\n\nExamples:\n- Swap 100 USDC for USDT0 on Merchant Moe: provider='merchant_moe', token_in='USDC', token_out='USDT0', amount_in='100', recipient='0x...', owner='0x...'\n- Swap 10 WMNT for USDC on Agni: provider='agni', token_in='WMNT', token_out='USDC', amount_in='10', recipient='0x...', owner='0x...'",
     inputSchema: {
       type: "object",
       properties: {

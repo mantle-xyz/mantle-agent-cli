@@ -96,7 +96,19 @@ export const MANTLE_PROTOCOLS: Record<Network, Record<string, ProtocolEntry>> = 
       }
     }
   },
-  sepolia: {}
+  sepolia: {
+    agni: {
+      name: "Agni Finance",
+      type: "dex",
+      status: "enabled",
+      contracts: {
+        // Placeholder addresses — Agni is mainnet-only; these allow sepolia unit
+        // tests to exercise chainId=5003 / TESTNET warning paths without RPC calls.
+        swap_router: "0x0000000000000000000000000000000000000001",
+        factory: "0x0000000000000000000000000000000000000002"
+      }
+    }
+  }
 };
 
 // ---------------------------------------------------------------------------
