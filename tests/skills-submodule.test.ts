@@ -1,28 +1,18 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-describe("skills submodule integration", () => {
-  it("tracks mantle-skills via git submodule metadata", () => {
-    const gitmodules = readFileSync(".gitmodules", "utf8");
+describe("skills directory", () => {
+  it("contains the mantle-openclaw-competition skill", () => {
+    expect(existsSync("skills/mantle-openclaw-competition/SKILL.md")).toBe(true);
 
-    expect(gitmodules).toContain('[submodule "skills"]');
-    expect(gitmodules).toContain("path = skills");
-    expect(gitmodules).toContain("url = https://github.com/mantle-xyz/mantle-skills.git");
-    expect(gitmodules).toContain("branch = main");
+    const skill = readFileSync("skills/mantle-openclaw-competition/SKILL.md", "utf8");
+    expect(skill).toContain("mantle-openclaw-competition");
   });
 
-  it("documents init and sync commands for the external skills checkout", () => {
-    const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
-      scripts?: Record<string, string>;
-    };
+  it("documents the skill in the root README", () => {
     const readme = readFileSync("README.md", "utf8");
 
-    expect(packageJson.scripts?.["skills:init"]).toBeDefined();
-    expect(packageJson.scripts?.["skills:sync"]).toBeDefined();
-
-    expect(readme).toContain("mantle-xyz/mantle-skills");
-    expect(readme).toContain("npm run skills:init");
-    expect(readme).toContain("npm run skills:sync");
-    expect(readme).toContain("skills/skills/<skill-name>/SKILL.md");
+    expect(readme).toContain("mantle-openclaw-competition");
+    expect(readme).toContain("skills/mantle-openclaw-competition/SKILL.md");
   });
 });
