@@ -97,20 +97,26 @@ describe("buildRemoveLiquidity — V3 agni, percentage mode", () => {
     expect(result.unsigned_tx.chainId).toBe(5000);
   });
 
-  it("100% removal — liquidity_to_remove = total_liquidity", async () => {
-    const result = await buildRemoveLiquidity(
-      {
-        provider: "agni",
-        token_id: "1",
-        percentage: 100,
-        recipient: FAKE_RECIPIENT,
-        owner: FAKE_WALLET
-      },
-      { ...baseDeps, getClient: makeV3Client(500_000n) as any }
+  it("100% removal — encodes full liquidity amount (differs from 50% calldata)", async () => {
+    const client = makeV3Client(500_000n);
+    const baseArgs = {
+      provider: "agni",
+      token_id: "1",
+      recipient: FAKE_RECIPIENT,
+      owner: FAKE_WALLET
+    };
+    const result100 = await buildRemoveLiquidity(
+      { ...baseArgs, percentage: 100 },
+      { ...baseDeps, getClient: client as any }
     );
-    expect(result.intent).toBe("remove_liquidity");
-    // "100%" warning should mention 100
-    expect(result.warnings.some(w => w.includes("100") || w.includes("liquidity"))).toBe(true);
+    const result50 = await buildRemoveLiquidity(
+      { ...baseArgs, percentage: 50 },
+      { ...baseDeps, getClient: client as any }
+    );
+    // Different liquidity amounts in decreaseLiquidity → different ABI encoding
+    expect(result100.unsigned_tx.data).not.toBe(result50.unsigned_tx.data);
+    // 100% removal warning should be present
+    expect(result100.warnings.some(w => w.includes("100") || w.includes("liquidity"))).toBe(true);
   });
 
   it("fluxion: to=fluxion position manager", async () => {
@@ -213,7 +219,7 @@ describe("buildRemoveLiquidity — V3 agni, explicit liquidity", () => {
     expect(result.unsigned_tx.data.startsWith(SELECTOR_MULTICALL)).toBe(true);
   });
 
-  it("explicit liquidity number — also works", async () => {
+  it("explicit liquidity number — builds multicall calldata without any RPC call", async () => {
     const result = await buildRemoveLiquidity(
       {
         provider: "agni",
@@ -225,6 +231,9 @@ describe("buildRemoveLiquidity — V3 agni, explicit liquidity", () => {
       { ...baseDeps, getClient: noReadClient as any }
     );
     expect(result.intent).toBe("remove_liquidity");
+    // No RPC was needed (noReadClient would have thrown) — explicit mode bypasses positions()
+    expect(result.unsigned_tx.data.startsWith(SELECTOR_MULTICALL)).toBe(true);
+    expect(result.unsigned_tx.chainId).toBe(5000);
   });
 });
 
@@ -554,7 +563,7 @@ describe("buildRemoveLiquidity — common validation", () => {
     ).rejects.toMatchObject({ code: "INVALID_ADDRESS" });
   });
 
-  it("chainId=5000 for mainnet, built_at_utc=NOW", async () => {
+  it("token_id is ABI-encoded in multicall calldata (token_id=9999 → 0x270f)", async () => {
     const client = () => ({
       readContract: async ({ functionName }: { functionName: string }) => {
         if (functionName === "positions") {
@@ -566,12 +575,17 @@ describe("buildRemoveLiquidity — common validation", () => {
     const result = await buildRemoveLiquidity(
       {
         provider: "agni",
-        token_id: "1",
+        token_id: "9999",
         percentage: 50,
         recipient: FAKE_RECIPIENT,
         owner: FAKE_WALLET
       },
       { ...baseDeps, getClient: client as any }
+    );
+    // decreaseLiquidity(tokenId=9999,...) is encoded inside the multicall bytes[].
+    // 9999 decimal = 0x270f → ABI-padded to 32 bytes in the inner calldata.
+    expect(result.unsigned_tx.data.toLowerCase()).toContain(
+      "000000000000000000000000000000000000000000000000000000000000270f"
     );
     expect(result.unsigned_tx.chainId).toBe(5000);
     expect(result.built_at_utc).toBe(NOW);

@@ -248,13 +248,13 @@ describe("buildAddLiquidity — V3 agni, explicit ticks", () => {
     expect(result.warnings.some(w => w.includes("pool state") || w.includes("fallback") || w.includes("amountMin"))).toBe(true);
   });
 
-  it("invalid provider → INVALID_INPUT (UNSUPPORTED_PROTOCOL)", async () => {
+  it("invalid provider → UNSUPPORTED_PROTOCOL", async () => {
     await expect(
       buildAddLiquidity(
         { ...v3Args, provider: "unknown_dex" },
         { ...baseDeps, getClient: makeOuterClient({}) as any }
       )
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ code: "UNSUPPORTED_PROTOCOL" });
   });
 });
 
@@ -292,26 +292,32 @@ describe("buildAddLiquidity — V3 agni, range_preset", () => {
     expect(result.warnings.some(w => w.includes("range_preset") || w.includes("moderate"))).toBe(true);
   });
 
-  it("range_preset='aggressive' (±5%) — narrower range than moderate", async () => {
+  it("range_preset='aggressive' (±5%) — encodes narrower ticks than 'moderate' (±10%)", async () => {
     const outerClient = makeOuterClient({ poolAddress: FAKE_POOL, currentTick: 0, tickSpacing: 60 });
     vi.mocked(getPublicClient).mockReturnValue(
       makeInnerMockClient({ poolAddress: FAKE_POOL, currentTick: 0, tickSpacing: 60 }) as any
     );
-    const result = await buildAddLiquidity(
-      {
-        provider: "agni",
-        token_a: "WMNT",
-        token_b: "USDC",
-        amount_a: "10",
-        amount_b: "20",
-        fee_tier: 3000,
-        range_preset: "aggressive",
-        recipient: FAKE_RECIPIENT
-      },
+    const sharedArgs = {
+      provider: "agni",
+      token_a: "WMNT",
+      token_b: "USDC",
+      amount_a: "10",
+      amount_b: "20",
+      fee_tier: 3000,
+      recipient: FAKE_RECIPIENT
+    };
+    const resultModerate = await buildAddLiquidity(
+      { ...sharedArgs, range_preset: "moderate" },
       { ...baseDeps, getClient: outerClient as any }
     );
-    expect(result.intent).toBe("add_liquidity");
-    expect(result.warnings.some(w => w.includes("aggressive"))).toBe(true);
+    const resultAggressive = await buildAddLiquidity(
+      { ...sharedArgs, range_preset: "aggressive" },
+      { ...baseDeps, getClient: outerClient as any }
+    );
+    // Different tick ranges → different ABI-encoded calldata for the mint call
+    expect(resultAggressive.unsigned_tx.data).not.toBe(resultModerate.unsigned_tx.data);
+    expect(resultAggressive.intent).toBe("add_liquidity");
+    expect(resultAggressive.warnings.some(w => w.includes("aggressive"))).toBe(true);
   });
 
   it("invalid range_preset → INVALID_INPUT", async () => {
@@ -444,7 +450,7 @@ describe("buildAddLiquidity — merchant_moe, token amounts", () => {
 describe("buildAddLiquidity — merchant_moe, explicit distribution", () => {
   const ONE_E18 = 1_000_000_000_000_000_000;
 
-  it("valid explicit distribution (3 bins, sums to 1e18) — builds calldata", async () => {
+  it("valid explicit distribution (3 bins, sums to 1e18) — calldata encodes all 3 bins", async () => {
     const result = await buildAddLiquidity(
       {
         provider: "merchant_moe",
@@ -464,6 +470,11 @@ describe("buildAddLiquidity — merchant_moe, explicit distribution", () => {
       }
     );
     expect(result.intent).toBe("add_liquidity");
+    expect(result.unsigned_tx.to).toBe(LB_ROUTER);
+    // 3-bin explicit distribution: selector + struct with three arrays of length 3.
+    // Each array: 32 (offset) + 32 (length) + 3×32 (elements) = 160 bytes per array → >480 bytes payload.
+    // 480 bytes = 960 hex chars; add selector (8) + "0x" (2) → data length > 900.
+    expect(result.unsigned_tx.data.length).toBeGreaterThan(900);
   });
 
   it("distribution length mismatch → INVALID_INPUT", async () => {
@@ -539,25 +550,29 @@ describe("buildAddLiquidity — merchant_moe, explicit distribution", () => {
 // Merchant Moe LB — range_preset
 // =========================================================================
 describe("buildAddLiquidity — merchant_moe, range_preset", () => {
-  it("range_preset='conservative' (±20%) — computes deltaIds, auto-distribution", async () => {
-    const result = await buildAddLiquidity(
-      {
-        provider: "merchant_moe",
-        token_a: "WMNT",
-        token_b: "USDC",
-        amount_a: "10",
-        amount_b: "20",
-        bin_step: 25,
-        range_preset: "conservative",
-        recipient: FAKE_RECIPIENT
-      },
-      {
-        ...baseDeps,
-        getClient: makeOuterClient({ lbPairAddress: FAKE_LB_PAIR, tokenX: WMNT }) as any
-      }
+  it("range_preset='conservative' (±20%) — spans more bins than 'aggressive' (±5%), calldatas differ", async () => {
+    const client = makeOuterClient({ lbPairAddress: FAKE_LB_PAIR, tokenX: WMNT }) as any;
+    const sharedArgs = {
+      provider: "merchant_moe",
+      token_a: "WMNT",
+      token_b: "USDC",
+      amount_a: "10",
+      amount_b: "20",
+      bin_step: 25,
+      recipient: FAKE_RECIPIENT
+    };
+    const resultAggressive = await buildAddLiquidity(
+      { ...sharedArgs, range_preset: "aggressive" },
+      { ...baseDeps, getClient: client }
     );
-    expect(result.intent).toBe("add_liquidity");
-    expect(result.unsigned_tx.to).toBe(LB_ROUTER);
+    const resultConservative = await buildAddLiquidity(
+      { ...sharedArgs, range_preset: "conservative" },
+      { ...baseDeps, getClient: client }
+    );
+    // Conservative spans more bins → encodes a longer deltaIds/distribution array
+    expect(resultConservative.unsigned_tx.data).not.toBe(resultAggressive.unsigned_tx.data);
+    expect(resultConservative.unsigned_tx.to).toBe(LB_ROUTER);
+    expect(resultConservative.intent).toBe("add_liquidity");
   });
 });
 
