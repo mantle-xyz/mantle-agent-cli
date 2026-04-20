@@ -322,7 +322,7 @@ export const accountTools: Record<string, Tool> = {
   getNonce: {
     name: "mantle_getNonce",
     description:
-      "Get the current pending nonce (transaction count) for an address. Use this when the user reports nonce errors during signing/broadcast, then pass the returned nonce value (including 0 for fresh accounts) to build tools via the nonce parameter. Use the returned nonce immediately — it reflects the mempool state at collected_at_utc and may become stale within seconds if other transactions are pending.",
+      "Get the current pending nonce (transaction count) for an address. Use this when the user reports nonce errors during signing/broadcast, then pass the returned nonce value (including 0 for fresh accounts) to build tools via the nonce parameter. Use the returned nonce immediately — it reflects the mempool state at collected_at_utc and may become stale within seconds if other transactions are pending.\n\nExamples:\n- Get nonce before sending: address='0x458F293454fE0d67EC0655f3672301301DD51422'\n- Check fresh account nonce: address='0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8'",
     inputSchema: {
       type: "object",
       properties: {
